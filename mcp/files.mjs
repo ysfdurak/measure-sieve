@@ -7,7 +7,7 @@ import { extractGroup, buildProjects, analyze, sniff } from '../web/js/core.js';
 
 const MAX_FILES = 20000;
 const MAX_BYTES = 300 * 1024 * 1024;
-const SKIP = new Set(['.git', 'node_modules', '.pbi', 'StaticResources', 'cultures']);
+const SKIP = new Set(['.git', 'node_modules', '.pbi', 'StaticResources']);
 
 async function walkDir(root) {
   const out = []; let bytes = 0;

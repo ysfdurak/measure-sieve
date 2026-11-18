@@ -52,23 +52,28 @@ export function buildQueries(res) {
   return qs;
 }
 
-/** PowerShell köprüsünü çalıştırır. */
-export function runQueries(port, queries, { timeoutMs = 300000 } = {}) {
-  return new Promise((resolve, reject) => {
-    if (process.platform !== 'win32' && !process.env.MEASURE_SIEVE_MOCK) return reject(new Error('windowsOnly'));
-    const shell = process.env.MEASURE_SIEVE_PWSH || (process.platform === 'win32' ? 'powershell.exe' : 'pwsh');
-    const ps = spawn(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(here, 'desktop.ps1')], { windowsHide: true });
-    let out = '', err = '';
-    const timer = setTimeout(() => { ps.kill(); reject(new Error('timeout')); }, timeoutMs);
-    ps.stdout.on('data', d => { out += d; }); ps.stderr.on('data', d => { err += d; });
-    ps.on('error', e => { clearTimeout(timer); reject(e); });
-    ps.on('close', () => {
-      clearTimeout(timer);
-      try { const j = JSON.parse(out.replace(/^﻿/, '')); if (!j.ok) return reject(new Error(j.error)); resolve(j.results); }
-      catch (e) { reject(new Error('bridge: ' + (err || out).slice(0, 400))); }
+/** PowerShell köprüsünü çalıştırır. Veri UTF-8 geçici dosyalarla taşınır. */
+export async function runQueries(port, queries, { timeoutMs = 300000 } = {}) {
+  if (process.platform !== 'win32' && !process.env.MEASURE_SIEVE_MOCK) throw new Error('windowsOnly');
+  const shell = process.env.MEASURE_SIEVE_PWSH || (process.platform === 'win32' ? 'powershell.exe' : 'pwsh');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'measure-sieve-q-'));
+  const inFile = path.join(dir, 'in.json'), outFile = path.join(dir, 'out.json');
+  await fs.writeFile(inFile, JSON.stringify({ port, queries: queries.map(q => ({ id: q.id, dax: q.dax })) }), 'utf8');
+  try {
+    const err = await new Promise((resolve, reject) => {
+      const ps = spawn(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(here, 'desktop.ps1'), '-InFile', inFile, '-OutFile', outFile], { windowsHide: true });
+      let e = '';
+      const timer = setTimeout(() => { ps.kill(); reject(new Error('timeout')); }, timeoutMs);
+      ps.stdout.on('data', d => { e += d; }); ps.stderr.on('data', d => { e += d; });
+      ps.on('error', x => { clearTimeout(timer); reject(x); });
+      ps.on('close', () => { clearTimeout(timer); resolve(e); });
     });
-    ps.stdin.end(JSON.stringify({ port, queries: queries.map(q => ({ id: q.id, dax: q.dax })) }));
-  });
+    let txt;
+    try { txt = await fs.readFile(outFile, 'utf8'); } catch (e) { throw new Error('bridge: ' + String(err).slice(0, 600)); }
+    const j = JSON.parse(txt.replace(/^\uFEFF/, ''));
+    if (!j.ok) throw new Error(j.error);
+    return j.results;
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
 }
 
 /** Açık Power BI Desktop pencerelerinin motor portlarını bulur. */
@@ -105,6 +110,8 @@ export async function pickPort(res, ports) {
       if (!best || score > best.score) best = { ...p, score };
     } catch (e) { /* bu port yanıt vermedi */ }
   }
+  // INFO.TABLES() eski Desktop sürümlerinde yoktur: tek bir Desktop açıksa onu kullan
+  if (!best && ports.length === 1) best = { ...ports[0], score: null };
   return best;
 }
 

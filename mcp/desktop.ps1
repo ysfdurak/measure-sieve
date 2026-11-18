@@ -1,10 +1,12 @@
 # Measure Sieve · Power BI Desktop sorgu köprüsü (yalnızca okur)
 # Açık Power BI Desktop'ın yerel Analysis Services motoruna bağlanır ve DAX sorgularını çalıştırır.
-# Girdi (stdin, JSON):  { "port": 51234, "queries": [ { "id": "v1", "dax": "EVALUATE ..." } ] }
-# Çıktı (stdout, JSON): { "ok": true, "results": [ { "id": "v1", "columns": [...], "rows": [[...]], "error": null } ] }
+# Girdi (-InFile, UTF-8 JSON):  { "port": 51234, "queries": [ { "id": "v1", "dax": "EVALUATE ..." } ] }
+# Çıktı (-OutFile, UTF-8 JSON): { "ok": true, "results": [ { "id": "v1", "columns": [...], "rows": [[...]], "error": null } ] }
+# Veri, Türkçe karakterler bozulmasın diye konsol yerine UTF-8 geçici dosyalarla taşınır (Windows PowerShell 5.1 konsolu UTF-8 değildir).
 # Yalnızca EVALUATE sorguları çalıştırılır; modeli değiştiren hiçbir komut gönderilmez.
+param([Parameter(Mandatory = $true)][string]$InFile, [Parameter(Mandatory = $true)][string]$OutFile)
 $ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$utf8 = New-Object System.Text.UTF8Encoding($false)
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
 
 function J([object]$v) {
@@ -33,6 +35,10 @@ function J([object]$v) {
 function Find-Adomd {
   $c = @()
   if ($env:MEASURE_SIEVE_ADOMD) { $c += $env:MEASURE_SIEVE_ADOMD }
+  # Çalışan Power BI Desktop'ın kendi klasörü (Microsoft Store sürümünde WindowsApps listelenemeyebilir, ama yol okunabilir)
+  foreach ($p in (Get-Process -Name PBIDesktop -ErrorAction SilentlyContinue)) {
+    try { if ($p.Path) { $c += (Join-Path (Split-Path $p.Path) 'Microsoft.PowerBI.AdomdClient.dll') } } catch { }
+  }
   $c += "$env:ProgramFiles\Microsoft Power BI Desktop\bin\Microsoft.PowerBI.AdomdClient.dll"
   $c += (Get-ChildItem "$env:ProgramFiles\WindowsApps\Microsoft.MicrosoftPowerBIDesktop_*\bin\Microsoft.PowerBI.AdomdClient.dll" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | ForEach-Object FullName)
   $c += (Get-ChildItem "$env:ProgramFiles\Microsoft SQL Server Management Studio*\Common7\IDE\Microsoft.AnalysisServices.AdomdClient.dll" -ErrorAction SilentlyContinue | ForEach-Object FullName)
@@ -40,7 +46,7 @@ function Find-Adomd {
   return $null
 }
 
-$req = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$req = [System.IO.File]::ReadAllText($InFile, $utf8) | ConvertFrom-Json
 $out = New-Object System.Text.StringBuilder
 try {
   if ($env:MEASURE_SIEVE_MOCK) {
@@ -49,8 +55,12 @@ try {
   } else {
     $dll = Find-Adomd
     if (-not $dll) { throw 'ADOMD istemcisi bulunamadı. Power BI Desktop kurulu olmalı ya da MEASURE_SIEVE_ADOMD ortam değişkeni DLL yolunu göstermeli.' }
-    Add-Type -Path $dll
-    $conn = New-Object Microsoft.AnalysisServices.AdomdClient.AdomdConnection("Data Source=localhost:$($req.port)")
+    # Sınıf adını DLL'in içinden bul: sürümler arasında ad alanı farklı olabilir
+    $asm = [System.Reflection.Assembly]::LoadFrom($dll)
+    $type = $null
+    try { $type = $asm.GetExportedTypes() | Where-Object { $_.Name -eq 'AdomdConnection' } | Select-Object -First 1 } catch { }
+    if (-not $type) { throw "AdomdConnection sınıfı bulunamadı: $dll" }
+    $conn = [Activator]::CreateInstance($type, @("Data Source=localhost:$($req.port)"))
     $conn.Open()
   }
   [void]$out.Append('{"ok":true,"results":[')
@@ -63,7 +73,7 @@ try {
       if ($env:MEASURE_SIEVE_MOCK) {
         $h = 0; foreach ($ch in $q.dax.ToCharArray()) { $h = ($h * 31 + [int]$ch) % 1000003 }
         if ($env:MEASURE_SIEVE_MOCK -eq 'shift' -and $q.dax -match 'SHIFTME') { $h = $h + 1 }
-        [void]$out.Append('"columns":["[x]","[v]"],"rows":[[' + (J 'a') + ',' + (J ([double]$h)) + '],[' + (J 'b') + ',null]],"error":null}')
+        [void]$out.Append('"columns":["[x]","[v]"],"rows":[[' + (J $q.dax) + ',' + (J ([double]$h)) + '],[' + (J 'b') + ',null]],"error":null}')
         continue
       }
       $cmd = $conn.CreateCommand(); $cmd.CommandText = $q.dax; $cmd.CommandTimeout = 120
@@ -84,7 +94,7 @@ try {
   }
   [void]$out.Append(']}')
   if ($conn) { $conn.Close() }
-  [Console]::Out.Write($out.ToString())
+  [System.IO.File]::WriteAllText($OutFile, $out.ToString(), $utf8)
 } catch {
-  [Console]::Out.Write('{"ok":false,"error":' + (J $_.Exception.Message) + '}')
+  [System.IO.File]::WriteAllText($OutFile, '{"ok":false,"error":' + (J $_.Exception.Message) + '}', $utf8)
 }

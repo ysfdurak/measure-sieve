@@ -91,7 +91,34 @@ export function applyBim(json, rm) {
     });
   });
   (m.roles || []).forEach(r => { if (r.tablePermissions) r.tablePermissions = r.tablePermissions.filter(tp => !tGone(tp.name)); });
+  (m.cultures || []).forEach(c => {
+    const lm = c.linguisticMetadata; if (!lm || lm.content == null) return;
+    if (typeof lm.content === 'string') { try { const o = JSON.parse(lm.content); if (cleanLinguistic(o, rm)) lm.content = JSON.stringify(o); } catch (e) { /* dokunma */ } }
+    else cleanLinguistic(lm.content, rm);
+  });
   return json;
+}
+
+/** Q&A dil verisinden (linguistic metadata) kaldırılan öğelere bağlı kayıtları çıkarır. */
+export function cleanLinguistic(obj, rm) {
+  if (!obj || typeof obj !== 'object' || !obj.Entities) return false;
+  let changed = false;
+  for (const [k, e] of Object.entries(obj.Entities)) {
+    const b = e && e.Definition && e.Definition.Binding; if (!b || !b.ConceptualEntity) continue;
+    const t = norm(b.ConceptualEntity), p = b.ConceptualProperty != null ? norm(b.ConceptualProperty) : null;
+    if (rm.tables.has(t) || (p && (rm.measures.has(t + '|' + p) || rm.columns.has(t + '|' + p)))) { delete obj.Entities[k]; changed = true; }
+  }
+  return changed;
+}
+/** Model diyagramından kaldırılan tabloların kutularını çıkarır. */
+export function cleanDiagram(obj, rm) {
+  let changed = false;
+  (obj && obj.diagrams || []).forEach(d => {
+    const before = (d.nodes || []).length;
+    d.nodes = (d.nodes || []).filter(n => !rm.tables.has(norm(n.nodeIndex)));
+    if (d.nodes.length !== before) changed = true;
+  });
+  return changed;
 }
 
 /* ---------------------------------------------------------------- 3. TMDL (PBIP) */
@@ -159,6 +186,26 @@ export function applyTmdlFile(path, text, rm) {
     });
     return ranges.length ? out(tidy(cut(lines, ranges))) : null;
   }
+  if (/(^|\/)cultures\//.test(lp)) {
+    // linguisticMetadata = ardından girintili (ya da ``` içinde) JSON gelir
+    const i = lines.findIndex(l => /^\s*linguisticMetadata\s*=/.test(l)); if (i < 0) return null;
+    const base = indentOf(lines[i]); let j = i + 1; const body = [];
+    let fenced = false;
+    for (; j < lines.length; j++) {
+      const l = lines[j], tt = l.trim();
+      if (tt === '```') { if (fenced) { j++; break; } fenced = true; continue; }
+      if (!fenced && tt && indentOf(l) <= base + 1) break; // ayar satırları (contentType) bir alt düzeydedir
+      body.push(l);
+    }
+    const ind = body.filter(l => l.trim()).map(l => /^[\t ]*/.exec(l)[0]);
+    const prefix = ind.reduce((a, x) => x.length < a.length ? x : a, ind[0] || '');
+    let obj; try { obj = JSON.parse(body.map(l => l.startsWith(prefix) ? l.slice(prefix.length) : l).join('\n')); } catch (e) { return null; }
+    if (!cleanLinguistic(obj, rm)) return null;
+    const start = i + 1 + (lines[i + 1] && lines[i + 1].trim() === '```' ? 1 : 0);
+    const end = start + body.length;
+    const neu = JSON.stringify(obj, null, 2).split('\n').map(l => prefix + l);
+    return out(lines.slice(0, start).concat(neu, lines.slice(end)).join('\n'));
+  }
   if (/(^|\/)roles\//.test(lp)) {
     const ranges = blocks(lines, 1).filter(b => b.kw === 'tablePermission' && tGone(b.name));
     return ranges.length ? out(tidy(cut(lines, ranges))) : null;
@@ -210,6 +257,17 @@ export async function buildCleanFiles(res, rm) {
     const bytes = await e.read();
     const json = applyBim(parseJson(decode(bytes)), rm);
     changed.set(e.path, encodeLike(bytes, JSON.stringify(json, null, src.format === 'bim' ? 2 : undefined)));
+    await cleanDiagramFile(src, rm, changed);
+    if (src.format === 'pbit' && src.group) {
+      // İçeriği değişen pakette SecurityBindings (bu bilgisayara bağlı kimlik bilgisi bağı) geçersiz kalır:
+      // dosya bozuk görünmesin diye çıkarılır; Desktop gerekirse kimlik bilgisini yeniden sorar.
+      const sb = src.group.entries.find(x => x.path === 'SecurityBindings');
+      if (sb) {
+        deleted.add(sb.path);
+        const ct = src.group.entries.find(x => x.path === '[Content_Types].xml');
+        if (ct) { const b = await ct.read(), t = decode(b); const t2 = t.replace(/<Override[^>]*PartName="\/SecurityBindings"[^>]*\/>/g, ''); if (t2 !== t) changed.set(ct.path, encodeLike(b, t2)); }
+      }
+    }
   } else {
     // Modelin klasöründeki TÜM .tmdl dosyaları (perspektifler, roller dahil; okuma sırasında atlananlar da)
     const root = (src.key || '').toLowerCase();
@@ -219,8 +277,17 @@ export async function buildCleanFiles(res, rm) {
       if (r == null) continue;
       if (typeof r === 'object' && r.delete) deleted.add(f.path); else changed.set(f.path, encodeLike(bytes, r));
     }
+    await cleanDiagramFile(src, rm, changed);
   }
   return { format: src.format, changed, deleted };
+}
+
+async function cleanDiagramFile(src, rm, changed) {
+  if (!rm.tables.size || !src.group) return;
+  const root = (src.key || '').toLowerCase();
+  const e = src.group.entries.find(x => { const p = x.path.toLowerCase(); return (src.format === 'pbit' ? p === 'diagramlayout' : /(^|\/)diagramlayout\.json$/.test(p) && (!root || p.startsWith(root + '/'))); });
+  if (!e) return;
+  try { const b = await e.read(), o = parseJson(decode(b)); if (cleanDiagram(o, rm)) changed.set(e.path, encodeLike(b, JSON.stringify(o, null, src.format === 'pbit' ? undefined : 2))); } catch (err) { /* diyagram isteğe bağlı */ }
 }
 
 /** Grubun girişlerine değişiklikleri uygular: yeni giriş listesi (doğrulama ve paketleme için) */
@@ -228,11 +295,11 @@ export function patchedEntries(group, out) {
   return group.entries.filter(e => !out.deleted.has(e.path)).map(e => out.changed.has(e.path) ? { path: e.path, read: async () => out.changed.get(e.path) } : e);
 }
 
-/** PBIT için yeni ZIP, PBIP için tüm klasörün ZIP'i. zipLib: JSZip sınıfı. */
+/** PBIT için yeni ZIP, PBIP için tüm klasörün ZIP'i (veri önbelleği .pbi/cache.abf dahil; böylece
+ *  Desktop kopyayı yenilemeden açar). Girişler aslındaki sırayla yazılır. zipLib: JSZip sınıfı. */
 export async function packCopy(group, out, zipLib) {
   const zip = new zipLib();
   for (const e of patchedEntries(group, out)) {
-    if (/(^|\/)\.pbi\/cache\.abf$/i.test(e.path)) continue; // önbellek; Desktop yeniden üretir
     zip.file(e.path, await e.read(), { date: new Date(), compression: 'DEFLATE' });
   }
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });

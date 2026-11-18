@@ -71,7 +71,7 @@ async function ingest(items) {
       if (/\.(pbit|pbix|zip)$/i.test(it.file.name)) {
         try { groups.push(await zipGroup(it.file)); }
         catch (err) { notes.push({ code: err && err.code ? err.code : 'notZip', err: true, args: { name: it.file.name } }); }
-      } else if (!/(^|\/)\.pbi\/cache\.abf$/i.test(it.path || '')) loose.push(it); // klasörün tamamı: temizlenmiş kopya için gerekir
+      } else loose.push(it); // klasörün tamamı (veri önbelleği dahil): temizlenmiş kopya için gerekir
     }
     if (!groups.length && !loose.length && !notes.length) notes.push({ code: 'unsupported', err: true, args: { name: items[0].file.name } });
     if (loose.length && !loose.some(i => /\.(json|tmdl|bim|pbir|pbism|pbip)$/i.test(i.file.name))) { notes.push({ code: 'unsupported', err: true, args: { name: loose[0].file.name } }); loose.length = 0; }
@@ -277,7 +277,7 @@ function cleanHtml(R) {
       body += `<div class="impact${v.ok ? '' : ' warn'}"><b>${esc(t(v.ok ? 'c.ok' : 'c.fail'))}</b>
         <span>${esc(t('c.counts', { mb: k.before.measure, ma: k.after.measure, cb: k.before.column, ca: k.after.column, tb: k.before.table, ta: k.after.table }))}</span>
         <ul class="checks">${v.checks.map(ch => `<li data-ok="${ch.ok}"><span aria-hidden="true">${ch.ok ? '✓' : '✗'}</span> ${esc(t('chk.' + ch.code))}${ch.ok ? '' : ': ' + esc(listNames(t, ch.items, 4))}</li>`).join('')}</ul></div>
-        ${c.url ? `<a class="btn primary" href="${c.url}" download="${esc(c.name)}">${esc(t('c.download', { name: c.name }))}</a><p class="muted" style="font-size:12.5px">${esc(t('c.downloadNote'))}</p>` : ''}
+        ${c.url ? `<button class="btn primary" type="button" id="saveClean">${esc(t('c.download', { name: c.name }))}</button><div class="copied" role="status">${esc(c.saveMsg || '')}</div><p class="muted" style="font-size:12.5px">${esc(t('c.downloadNote'))}</p>` : ''}
         <p class="muted" style="font-size:13px">${esc(t('c.next'))}</p>`;
     }
     if (c && c.plan && c.plan.skipped.length) {
@@ -299,7 +299,7 @@ async function buildClean() {
     const base = ascii(R.source.group.label.replace(/\.(pbit|zip)$/i, ''));
     const name = R.source.format === 'pbit' ? `${base}.${lang === 'tr' ? 'temiz' : 'clean'}.pbit` : `${base}-${lang === 'tr' ? 'temiz' : 'clean'}.zip`;
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
-    state.clean = { plan, v, url, name };
+    state.clean = { plan, v, url, name, bytes };
   } catch (e) { state.clean = { err: String(e && e.message || e) }; }
   renderPanel();
 }
@@ -342,7 +342,22 @@ document.addEventListener('click', e => {
   if (el.dataset.filter) { state.filter = el.dataset.filter; state.limit = PAGE; renderTop(); renderList(); return; }
   if (el.dataset.copy) copyOut(el.dataset.copy);
 });
-document.addEventListener('click', e => { if (e.target.closest('#buildClean')) buildClean(); });
+document.addEventListener('click', e => { if (e.target.closest('#buildClean')) buildClean(); if (e.target.closest('#saveClean')) saveClean(); });
+
+/** Kopyayı kaydet: claude.ai içinde "downloads" yeteneğiyle, kendi sitede normal indirme bağlantısıyla. */
+async function saveClean() {
+  const c = state.clean; if (!c || !c.url) return;
+  let dl = null;
+  try { dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
+  if (dl) {
+    let name = c.name, data = new Blob([c.bytes]);
+    if (/\.pbit$/i.test(name)) { const z = new window.JSZip(); z.file(name, c.bytes); data = await z.generateAsync({ type: 'blob' }); name += '.zip'; } // .pbit uzantısı burada indirilemiyor
+    try { await dl.save({ filename: name, data }); c.saveMsg = /\.zip$/.test(name) && /\.pbit\.zip$/.test(name) ? t('c.savedZip') : t('c.saved'); }
+    catch (e) { c.saveMsg = e && e.code === 'declined' ? '' : t('c.saveFail', { why: e && (e.code || e.message) || '' }); }
+    renderPanel(); return;
+  }
+  const a = document.createElement('a'); a.href = c.url; a.download = c.name; document.body.appendChild(a); a.click(); a.remove();
+}
 document.addEventListener('change', e => {
   if (e.target.dataset.sel) { const k = e.target.dataset.sel; e.target.checked ? state.selected.add(k) : state.selected.delete(k); resetClean(); renderPanel(); }
   if (e.target.id === 'modelSelect') { selectProject(+e.target.value); render(); }

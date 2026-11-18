@@ -78,3 +78,26 @@ test('TMDL düzenleme: measure, sıralama sütunu, hiyerarşi düzeyi, perspekti
   assert.deepEqual(applyTmdlFile('M.SemanticModel/definition/tables/Eski.tmdl', 'table Eski\n', rm), { delete: true });
   assert.equal(applyTmdlFile('M.SemanticModel/definition/model.tmdl', 'model Model\n\nref table Satış\nref table Eski\n', rm), 'model Model\n\nref table Satış\n');
 });
+
+test('Q&A dil verisi, diyagram ve PBIT güvenlik bağı temizlenir', async () => {
+  const { cleanLinguistic, cleanDiagram } = await import('../web/js/clean.js');
+  const rm = { tables: new Set(['eski']), measures: new Set(['satış|yetim']), columns: new Set() };
+  const lm = { Entities: { a: { Definition: { Binding: { ConceptualEntity: 'Satış', ConceptualProperty: 'Yetim' } } }, b: { Definition: { Binding: { ConceptualEntity: 'Eski' } } }, c: { Definition: { Binding: { ConceptualEntity: 'Satış', ConceptualProperty: 'Kalan' } } } } };
+  assert.equal(cleanLinguistic(lm, rm), true);
+  assert.deepEqual(Object.keys(lm.Entities), ['c']);
+  const dg = { diagrams: [{ nodes: [{ nodeIndex: 'Eski' }, { nodeIndex: 'Satış' }] }] };
+  assert.equal(cleanDiagram(dg, rm), true); assert.deepEqual(dg.diagrams[0].nodes, [{ nodeIndex: 'Satış' }]);
+  const tmdl = "cultureInfo tr-TR\n\n\tlinguisticMetadata =\n\t\t\t{\n\t\t\t  \"Entities\": {\n\t\t\t    \"a\": { \"Definition\": { \"Binding\": { \"ConceptualEntity\": \"Satış\", \"ConceptualProperty\": \"Yetim\" } } },\n\t\t\t    \"c\": { \"Definition\": { \"Binding\": { \"ConceptualEntity\": \"Satış\", \"ConceptualProperty\": \"Kalan\" } } }\n\t\t\t  }\n\t\t\t}\n\t\tcontentType: json\n\n";
+  const out = applyTmdlFile('M.SemanticModel/definition/cultures/tr-TR.tmdl', tmdl, rm);
+  assert.doesNotMatch(out, /Yetim/); assert.match(out, /Kalan/); assert.match(out, /\n\t\tcontentType: json\n/);
+  // PBIT: SecurityBindings ve [Content_Types].xml kaydı
+  const enc = s => new TextEncoder().encode(s);
+  const es = [...sampleEntries('tr'),
+    { path: 'SecurityBindings', read: async () => new Uint8Array([1, 2, 3]) },
+    { path: '[Content_Types].xml', read: async () => enc('<Types><Override PartName="/SecurityBindings" ContentType="" /><Default Extension="json" ContentType="" /></Types>') }];
+  const x = await extractGroup({ label: 's', kind: 'zip', entries: es }); const res = analyze(buildProjects([x]).projects[0]);
+  const plan = cleanupPlan(res, [{ kind: 'node', id: res.items.find(n => n.name === 'Test Measure').id }]);
+  const o = await buildCleanFiles(res, plan.rm);
+  assert.ok(o.deleted.has('SecurityBindings'));
+  assert.doesNotMatch(decode(o.changed.get('[Content_Types].xml')), /SecurityBindings/);
+});

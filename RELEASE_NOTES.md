@@ -1,5 +1,12 @@
 # Sürüm notları
 
+## 1.1.1 · Kasım 2026 (Desktop testi öncesi)
+
+- Desktop köprüsü: veri UTF-8 geçici dosyalarla taşınıyor (Türkçe karakterler bozulmaz); ADOMD istemcisi çalışan Desktop'ın klasöründen de bulunuyor; sınıf adı DLL içinden okunuyor; eski Desktop sürümlerinde tek açık pencere otomatik seçiliyor.
+- Temizlenmiş kopya: veri önbelleği (cache.abf) korunuyor; Q&A dil verisi ve model diyagramı temizleniyor; PBIT'te SecurityBindings çıkarılıyor.
+- claude.ai sayfasında kopya indirme çalışıyor (PBIT, ZIP içinde iner).
+- `npm run web` ile yerel sunucu; Desktop test planı (docs/DESKTOP_TEST_PLANI.md).
+
 ## 1.1.0 · Kasım 2026
 
 - Ad değişti: **Ölçü Eleği → Measure Sieve** (Power BI'da kullanılan terim; adres measure-sieve.ysfdurak.com). Türkçe arayüzde de "measure" kullanılıyor.

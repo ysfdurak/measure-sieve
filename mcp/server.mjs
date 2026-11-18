@@ -229,7 +229,7 @@ server.registerTool('temiz_kopya_olustur', {
   let target;
   if (st.isDirectory()) {
     target = await checkTarget(hedef || `${real}-${word}`);
-    await fs.cp(real, target, { recursive: true, filter: s => !/[\\/]\.pbi[\\/]cache\.abf$/i.test(s) });
+    await fs.cp(real, target, { recursive: true }); // veri önbelleği dahil: Desktop kopyayı yenilemeden açar
     for (const [rel, bytes] of out.changed) await fs.writeFile(path.join(target, ...rel.split('/')), bytes);
     for (const rel of out.deleted) await fs.rm(path.join(target, ...rel.split('/')), { force: true });
   } else if (/\.pbit$/i.test(real)) {

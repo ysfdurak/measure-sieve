@@ -43,7 +43,7 @@ Claude Desktop'ta **Ayarlar › Geliştirici › Yapılandırmayı düzenle** il
 | `modeli_tara` | Özet ve adaylar: kullanılmayan measure, sütun, tablolar; aynı formüller; raporda olup modelde olmayan alanlar | Hayır |
 | `oge_detayi` | Bir öğenin formülü, kullanıldığı yerler, onu kullananlar ve onun kullandıkları | Hayır |
 | `silme_plani` | Silme sırası, etkiler, Tabular Editor betiği ve Power Query adımı | Hayır |
-| `temiz_kopya_olustur` | Temizlenmiş kopyayı yazar (`X.temiz.pbit` ya da `klasör-temiz/`) ve yapısal doğrulamayı çalıştırır | Yalnızca yeni kopya |
+| `temiz_kopya_olustur` | Temizlenmiş kopyayı yazar (`X.temiz.pbit` ya da `klasör-temiz/`, veri önbelleği dahil) ve yapısal doğrulamayı çalıştırır | Yalnızca yeni kopya |
 | `desktop_listele` | Açık Power BI Desktop pencerelerinin motor portları | Hayır |
 | `degerleri_olc` | Açık Desktop'ta görsellerin ve measure'ların değerlerini hesaplatıp kaydeder | Hayır |
 | `degerleri_karsilastir` | Aynı sorguları yeniden çalıştırıp kayıtla satır satır karşılaştırır | Hayır |
@@ -62,6 +62,8 @@ Ayrıntılar:
 - Her görsel için sütunlar + measure'lar `SUMMARIZECOLUMNS` ile en fazla 500 satır olarak hesaplanır; ayrıca her kullanılan measure'ın toplamı alınır. Görsel ve sayfa filtreleri uygulanmaz: amaç raporu birebir kopyalamak değil, önceki ve sonraki hâli karşılaştırmaktır.
 - Önceden de hata veren sorgular (ör. çok karmaşık görseller) karşılaştırmaya alınmaz ve ayrıca listelenir.
 - Ölçümler geçici klasörde (`%TEMP%\measure-sieve`) saklanır.
+- Sorgular ve sonuçlar Türkçe karakterler bozulmasın diye UTF-8 geçici dosyalarla taşınır.
+- Kurumsal bilgisayarlarda PowerShell kısıtlı dil kipindeyse (Constrained Language Mode) köprü DLL yükleyemez; bu durumda BT'den izin gerekir.
 
 ## Örnek sorular
 

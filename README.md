@@ -75,13 +75,13 @@ docs/            Proje rehberi, MCP kurulumu, gerçek dosya test sonuçları
 ## Geliştirme
 
 ```bash
-cd mcp && npm install && npm test          # 14 test: çekirdek, PBIX okuyucu, temizlik, MCP
+cd mcp && npm install && npm test          # çekirdek, PBIX okuyucu, temizlik, sayısal doğrulama, MCP
 node tests/gercek-dosyalar.mjs Rapor.pbix    # kendi dosyanla dene
-cd web && python3 -m http.server 8080        # tarayıcı sürümünü yerelde aç
+npm run web                                  # (mcp klasöründe) tarayıcı sürümü: http://localhost:8080
 node tools/build-artifact.mjs               # dist/measure-sieve.html
 ```
 
-Ayrıntılı anlatım: [docs/PROJE_REHBERI.md](docs/PROJE_REHBERI.md) · Claude ile kullanım: [docs/MCP.md](docs/MCP.md) · Test sonuçları: [docs/GERCEK_DOSYA_TESTLERI.md](docs/GERCEK_DOSYA_TESTLERI.md)
+Ayrıntılı anlatım: [docs/PROJE_REHBERI.md](docs/PROJE_REHBERI.md) · Desktop test planı: [docs/DESKTOP_TEST_PLANI.md](docs/DESKTOP_TEST_PLANI.md) · Claude ile kullanım: [docs/MCP.md](docs/MCP.md) · Test sonuçları: [docs/GERCEK_DOSYA_TESTLERI.md](docs/GERCEK_DOSYA_TESTLERI.md)
 
 ## Lisans
 

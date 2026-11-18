@@ -100,6 +100,7 @@ Uygulama hiçbir zaman dosyayı kendisi değiştirmez. Bu bilinçli: silme geri 
 **Sonra dosya yazılır:**
 - **TMSL (PBIT, model.bim):** JSON'dan öğe çıkarılır. Kaldırılan sütuna bakan sıralama ayarları, hiyerarşi düzeyleri, ilişkiler, perspektif ve rol kayıtları da temizlenir. PBIT'teki dosya aynı karakter kodlamasıyla (UTF-16) geri yazılır.
 - **TMDL (PBIP):** Metin dosyalarından ilgili bloklar silinir (üstündeki `///` açıklamalarıyla birlikte). Silinen hesaplanmış tablonun dosyası kaldırılır, `model.tmdl`'deki `ref table` satırı da.
+- **Her iki biçimde:** Q&A dil verisindeki (cultures) ilgili kayıtlar ve model diyagramındaki kutular da çıkarılır. Veri önbelleği (`.pbi/cache.abf`) korunur, böylece Desktop kopyayı yenilemeden açar. PBIT'te bu bilgisayara bağlı `SecurityBindings` dosyası çıkarılır; içerik değişince geçersiz kalır.
 
 **Yapısal doğrulama (`verifyCopy`).** Kopya baştan, aslıyla aynı okuyucuyla taranır ve beş şey kontrol edilir:
 1. Seçilen öğeler kopyada yok.
