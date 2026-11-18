@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ölçü Eleği · Kullanılmayan Power BI ölçülerini bulun</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Power BI raporunuzdaki kullanılmayan ölçüleri, sütunları ve tabloları bulun, güvenli silme sırasını çıkarın. Ücretsiz, kurulumsuz; dosyanız tarayıcınızdan çıkmaz.">
+<link rel="canonical" href="https://olcu-elegi.ysfdurak.com/">
+<link rel="alternate" hreflang="tr" href="https://olcu-elegi.ysfdurak.com/">
+<link rel="alternate" hreflang="en" href="https://olcu-elegi.ysfdurak.com/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://olcu-elegi.ysfdurak.com/">
+<meta property="og:title" content="Ölçü Eleği">
+<meta property="og:description" content="Power BI modelinizde kullanılmayan ölçü, sütun ve tabloları bulun. Dosyanız tarayıcınızdan çıkmaz.">
+<meta property="og:url" content="https://olcu-elegi.ysfdurak.com/">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B6478'/%3E%3Crect x='6' y='6' width='8' height='8' rx='1.5' fill='%23fff'/%3E%3Crect x='18' y='6' width='8' height='8' rx='1.5' fill='%23fff'/%3E%3Crect x='6' y='18' width='8' height='8' rx='1.5' fill='%23fff'/%3E%3Crect x='18.75' y='18.75' width='6.5' height='6.5' rx='1' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="bar" aria-label="Bağlantılar">
+    <a href="https://github.com/ysfdurak/olcu-elegi" data-i18n="foot.source">Kaynak kodu</a>
+    <button id="langSwitch" class="link" type="button" lang="en" data-i18n="lang.switch" data-i18n-attr="title:lang.title">English</button>
+  </nav>
+
+  <header class="top">
+    <div class="brand">
+      <h1>Ölçü Eleği</h1>
+      <p data-i18n="brand.lead">Power BI modelinde hangi ölçü, sütun ve tabloların gerçekten kullanıldığını bulur; kullanılmayanları güvenli silme sırasıyla listeler. Dosyan bu sayfadan çıkmaz; analiz tarayıcında yapılır.</p>
+    </div>
+    <div class="drop" id="drop">
+      <div class="drop-title" data-i18n="drop.title">PBIT, PBIP veya PBIX dosyanı buraya bırak</div>
+      <div class="drop-hint" data-i18n="drop.hint">En iyi sonuç için PBIT ya da PBIP kullan. Aynı modele bağlı başka raporları da ekleyebilirsin.</div>
+      <div class="btns">
+        <button class="btn primary" id="pickFile" type="button" data-i18n="drop.file">Dosya seç</button>
+        <button class="btn" id="pickDir" type="button" data-i18n="drop.dir">PBIP klasörü seç</button>
+        <button class="btn" id="reset" type="button" data-i18n="drop.reset" hidden>Örneğe dön</button>
+      </div>
+      <input id="fileInput" type="file" multiple accept=".pbit,.pbix,.pbip,.zip,.bim,.json,.tmdl" hidden>
+      <input id="dirInput" type="file" webkitdirectory multiple hidden>
+      <div class="sources" id="sources"></div>
+    </div>
+  </header>
+
+  <section class="verdict" aria-live="polite">
+    <div class="vhead">
+      <div class="tabs" role="tablist" id="tabs" data-i18n-attr="aria-label:tabs.label"></div>
+      <label class="modelpick" id="modelpick" hidden><span data-i18n="model.label">Model</span> <select id="modelSelect"></select></label>
+    </div>
+    <h2 id="headline"></h2>
+    <p class="scope" id="scope"></p>
+    <div class="notices" id="notices"></div>
+    <div class="sieve" id="sieve"></div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="work">
+    <div style="min-width:0">
+      <div class="listhead">
+        <input class="search" id="search" type="search" data-i18n-attr="placeholder:search,aria-label:search">
+        <div class="btns">
+          <button class="btn" id="selCand" type="button" data-i18n="selCand">Adayları seç</button>
+          <button class="btn" id="selNone" type="button" data-i18n="selNone">Seçimi temizle</button>
+        </div>
+      </div>
+      <ul class="list" id="list"></ul>
+      <div id="more"></div>
+      <div id="missing"></div>
+    </div>
+    <aside class="panel" id="panel"></aside>
+  </section>
+
+  <section class="guide">
+    <div>
+      <h2 data-i18n="guide.files">Hangi dosya ne kadarını gösterir?</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th data-i18n="guide.th.file">Dosya</th><th data-i18n="guide.th.model">Ölçü, sütun ve formüller</th><th data-i18n="guide.th.report">Rapordaki kullanım</th></tr></thead>
+        <tbody>
+          <tr><td><b>PBIT</b></td><td data-i18n="guide.yes">Var</td><td data-i18n="guide.yes">Var</td></tr>
+          <tr><td><b>PBIP</b> <span data-i18n="guide.pbipFolder">(klasör veya ZIP)</span></td><td data-i18n="guide.yes">Var</td><td data-i18n="guide.yes">Var</td></tr>
+          <tr><td><b>model.bim + report.json</b></td><td data-i18n="guide.yes">Var</td><td data-i18n="guide.yes">Var</td></tr>
+          <tr><td><b>PBIX</b></td><td data-i18n="guide.pbixNo">Yok, model sıkıştırılmış durumda</td><td data-i18n="guide.yes">Var</td></tr>
+        </tbody>
+      </table></div>
+      <p data-i18n-html="guide.export"></p>
+    </div>
+    <div>
+      <h2 data-i18n="guide.scan">Tarama nereye bakar?</h2>
+      <ul>
+        <li data-i18n="guide.scan1"></li><li data-i18n="guide.scan2"></li><li data-i18n="guide.scan3"></li><li data-i18n="guide.scan4"></li>
+      </ul>
+      <p class="muted" data-i18n="guide.limit"></p>
+      <div class="mcp">
+        <h2 data-i18n="guide.mcp">Claude ile kullan</h2>
+        <p data-i18n="guide.mcpText"></p>
+        <p><a href="https://github.com/ysfdurak/olcu-elegi/blob/main/docs/MCP.md" data-i18n="guide.mcpLink">Kurulum adımları</a></p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span data-i18n="foot.text">Ölçü Eleği · Yusuf Durak · PolyForm Shield 1.0.0 lisansı ile ücretsiz</span>
+    <a href="https://ysfdurak.com">ysfdurak.com</a>
+    <a href="https://github.com/ysfdurak/olcu-elegi" data-i18n="foot.source">Kaynak kodu</a>
+  </footer>
+</div>
+<!--ZIP--><script src="vendor/jszip.min.js"></script><!--/ZIP-->
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

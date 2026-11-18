@@ -1,0 +1,38 @@
+// MCP protokol denetimi: sunucuyu gerçekten başlatır ve araçları çağırır.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { sampleEntries } from '../web/js/sample.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const req = createRequire(path.join(here, '../mcp/package.json'));
+const { Client } = await import(req.resolve('@modelcontextprotocol/sdk/client/index.js'));
+const { StdioClientTransport } = await import(req.resolve('@modelcontextprotocol/sdk/client/stdio.js'));
+const JSZip = (await import(req.resolve('jszip'))).default;
+
+test('MCP: araçlar listelenir ve örnek PBIT taranır', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'olcu-'));
+  const zip = new JSZip();
+  for (const e of sampleEntries('tr')) zip.file(e.path, await e.read());
+  const file = path.join(dir, 'Satış Raporu.pbit');
+  await writeFile(file, await zip.generateAsync({ type: 'nodebuffer' }));
+  const client = new Client({ name: 'test', version: '1.0.0' });
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(here, '../mcp/server.mjs'), dir] }));
+  try {
+    const tools = (await client.listTools()).tools.map(t => t.name).sort();
+    assert.deepEqual(tools, ['modeli_tara', 'oge_detayi', 'silme_plani']);
+    const scan = (await client.callTool({ name: 'modeli_tara', arguments: { yollar: [file] } })).content[0].text;
+    assert.match(scan, /\[Kullanılmıyor gibi\] Satış\[Hedefe Uzaklık\]/);
+    assert.match(scan, /Toplam Satış = Ciro|Ciro = Toplam Satış/);
+    const det = (await client.callTool({ name: 'oge_detayi', arguments: { yollar: [file], ad: 'Toplam Maliyet' } })).content[0].text;
+    assert.match(det, /Brüt Kâr/);
+    const plan = (await client.callTool({ name: 'silme_plani', arguments: { yollar: [file], dil: 'en' } })).content[0].text;
+    assert.match(plan, /Measures\["Hedefe Uzaklık"\]\.Delete\(\);/);
+    const outside = await client.callTool({ name: 'modeli_tara', arguments: { yollar: [os.homedir() === dir ? '/' : path.join(os.tmpdir(), '..')] } });
+    assert.equal(outside.isError, true, 'izinli klasör dışı reddedilir');
+  } finally { await client.close(); await rm(dir, { recursive: true, force: true }); }
+});

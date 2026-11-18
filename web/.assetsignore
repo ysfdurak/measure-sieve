@@ -1,0 +1,3 @@
+# Cloudflare'e yüklenmeyecek dosyalar
+.assetsignore
+vendor/README.md
