@@ -1,4 +1,4 @@
-/* Ölçü Eleği
+/* Measure Sieve
    Düzen: çalışan bir araç. Üstte sonuç cümlesi ve elek ızgarası, altında öğe listesi ve yapışkan temizlik paneli,
    en altta dosya rehberi. İmza öğesi elek: kalan öğeler dolu kare, elekten düşenler boş delik. */
 :root {
@@ -142,6 +142,17 @@ pre.dax { margin: 0; background: var(--code); border: 1px solid var(--line); bor
 .panel .btn { text-align: left }
 #out { width: 100%; min-height: 110px; font: 400 12px/1.5 var(--f-mono); background: var(--code); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 8px; resize: vertical }
 .copied { font-size: 13px; color: var(--used); font-weight: 500; min-height: 20px }
+
+/* temizlenmiş kopya */
+.cleanbox { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 10px }
+.cleanbox h2 { font-size: 17px }
+.cleanbox .btn { text-align: center; text-decoration: none }
+.checks { list-style: none; padding: 0 !important; margin: 2px 0 0 }
+.checks li[data-ok="true"] span { color: var(--used); font-weight: 700 }
+.checks li[data-ok="false"] span { color: var(--cand); font-weight: 700 }
+.skipped { font-size: 13px }
+.skipped summary { cursor: pointer; font-weight: 500 }
+.skipped ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; max-height: 220px; overflow: auto }
 
 /* rehber */
 .guide { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 28px; border-top: 1px solid var(--line); padding-top: 24px }

@@ -1,4 +1,4 @@
-// Ölçü Eleği · analiz çekirdeği
+// Measure Sieve · analiz çekirdeği
 // Bu dosya hem tarayıcıda (web/js/app.js) hem de MCP sunucusunda (mcp/server.mjs) aynen kullanılır.
 // DOM'a, ağa ya da dosya sistemine dokunmaz. Girdi olarak "giriş" (entry) listesi alır:
 //   { path: "Report/Layout", read: async () => Uint8Array }
@@ -10,9 +10,11 @@
 //   unused   Hiçbir yerde kullanımı bulunamadı
 //   chain    Yalnızca kullanılmayan başka öğelerde kullanılıyor
 //   review   Yalnızca gizli sayfada, yer iminde ya da metin olarak geçiyor; insan bakmalı
-//   indirect Kullanılan bir ölçünün/sütunun formülünde, ilişkide, güvenlik rolünde vb.
+//   indirect Kullanılan bir measure'ın/sütunun formülünde, ilişkide, güvenlik rolünde vb.
 //   used     Raporda doğrudan kullanılıyor
 //   unknown  Rapor yüklenmedi, karar verilemiyor
+
+import { modelFromPbix } from './pbix.js';
 
 export const STATUS_ORDER = ['unused', 'chain', 'review', 'indirect', 'used', 'unknown'];
 export const CANDIDATE = s => s === 'unused' || s === 'chain';
@@ -140,7 +142,7 @@ export function modelFromBim(json) {
 }
 
 /* TMDL: girintili metin biçimi (PBIP'nin yeni model biçimi). Tam bir ayrıştırıcı değil;
-   yalnızca ölçü, sütun, hiyerarşi, ilişki, rol ve hesaplama grubu bilgisini okur. */
+   yalnızca measure, sütun, hiyerarşi, ilişki, rol ve hesaplama grubu bilgisini okur. */
 const indentOf = l => { let i = 0, n = 0; while (l[i] === '\t' || l[i] === ' ') { n += l[i] === '\t' ? 1 : .25; i++; } return Math.floor(n); };
 function tmdlName(s) {
   s = s.trim();
@@ -401,7 +403,7 @@ const stem = s => s.replace(/\.(semanticmodel|dataset|report|pbix|pbit|pbip|zip|
  * definition.pbir içindeki datasetReference.byPath'ten okunur.
  */
 export async function extractGroup(g) {
-  const res = { label: g.label, kind: g.kind || 'folder', models: [], reports: [], notes: [], binaryModel: false, live: false };
+  const res = { label: g.label, kind: g.kind || 'folder', models: [], reports: [], notes: [], binaryModel: false, live: false, source: g };
   const es = g.entries.filter(e => !SKIP_DIR.test(e.path));
   const base = e => e.path.split('/').pop().toLowerCase();
   res.binaryModel = es.some(e => base(e) === 'datamodel');
@@ -411,7 +413,7 @@ export async function extractGroup(g) {
   const roots = new Map();
   es.forEach(e => {
     const m = MODEL_ROOT.exec(e.path); const key = m ? (m[1] + m[2]).toLowerCase() : '';
-    const isModelFile = base(e) === 'datamodelschema' || /\.bim$/i.test(e.path) || /\.tmdl$/i.test(e.path);
+    const isModelFile = base(e) === 'datamodelschema' || /\.bim$/i.test(e.path) || /\.tmdl$/i.test(e.path) || (base(e) === 'datamodel' && !m);
     if (!isModelFile) return;
     if (!m && REPORT_ROOT.test(e.path)) return;
     if (!roots.has(key)) roots.set(key, { key, label: m ? stem(m[2]) : stem(g.label), files: [] });
@@ -420,10 +422,16 @@ export async function extractGroup(g) {
   for (const r of roots.values()) {
     try {
       const dms = r.files.find(e => base(e) === 'datamodelschema') || r.files.find(e => /\.bim$/i.test(e.path));
-      let model = null;
-      if (dms) model = modelFromBim(parseJson(decode(await dms.read())));
-      else { const files = []; for (const e of r.files.filter(e => /\.tmdl$/i.test(e.path))) files.push({ path: e.path, text: decode(await e.read()) }); model = modelFromTmdl(files); }
-      if (model && model.tables.length) res.models.push({ key: r.key, label: r.label, model });
+      let model = null, format = null;
+      const pbixModel = r.files.find(e => base(e) === 'datamodel');
+      if (dms) { model = modelFromBim(parseJson(decode(await dms.read()))); format = base(dms) === 'datamodelschema' ? 'pbit' : 'bim'; }
+      else if (pbixModel) {
+        // PBIX: sıkıştırılmış modeli aç (pbix.js). Olmazsa yalnızca rapor tarafıyla devam edilir.
+        try { model = modelFromPbix(await pbixModel.read()); res.pbixModel = true; format = 'pbix'; }
+        catch (err) { res.notes.push({ code: 'pbixModelFailed', args: { name: g.label, why: String(err && err.message || err) } }); continue; }
+      }
+      else { const files = []; for (const e of r.files.filter(e => /\.tmdl$/i.test(e.path))) files.push({ path: e.path, text: decode(await e.read()) }); model = modelFromTmdl(files); format = 'tmdl'; }
+      if (model && model.tables.length) res.models.push({ key: r.key, label: r.label, model, format, files: r.files });
     } catch (err) {
       res.notes.push({ code: 'modelUnreadable', err: true, args: { name: r.label } });
     }
@@ -471,10 +479,11 @@ export function buildProjects(extractions) {
   const models = [], reports = [], notes = [];
   extractions.forEach((x, gi) => {
     notes.push(...x.notes);
-    x.models.forEach(m => models.push({ id: gi + '|' + m.key, label: m.label, model: m.model, group: x }));
+    x.models.forEach(m => models.push({ id: gi + '|' + m.key, key: m.key, label: m.label, model: m.model, format: m.format, files: m.files, group: x }));
     x.reports.forEach(r => reports.push({ rep: r, modelId: r.modelRef != null && x.models.some(m => m.key === r.modelRef) ? gi + '|' + r.modelRef : null, group: x }));
   });
-  const projects = models.map(m => ({ id: m.id, label: m.label, model: m.model, reports: [], notes: [], binary: false, live: false }));
+  // source: temizlenmiş kopya üretmek için modelin hangi dosyalardan okunduğu
+  const projects = models.map(m => ({ id: m.id, label: m.label, model: m.model, reports: [], notes: [], binary: false, live: false, source: { format: m.format, key: m.key, files: m.files, group: m.group.source } }));
   const loose = [];
   reports.forEach(r => {
     const p = r.modelId && projects.find(x => x.id === r.modelId);
@@ -508,7 +517,7 @@ export function analyze(project) {
     const n = {
       id: nodes.length, kind, name: d.name, table: table ? table.name : (d.table || ''), tableId: table ? table.id : null, origin,
       expr: d.expr == null ? null : d.expr, extras: d.extras || '', hidden: !!d.hidden, folder: d.folder || '', calculated: !!d.calculated,
-      usages: [], uses: new Set(), usedBy: new Set(), structural: [], textRefs: [], duplicates: [], status: 'used', reason: null
+      usages: [], uses: new Set(), usedBy: new Set(), structural: [], textRefs: [], duplicates: [], unresolved: [], status: 'used', reason: null
     };
     nodes.push(n); if (table) table.nodes.push(n.id); return n;
   };
@@ -550,7 +559,7 @@ export function analyze(project) {
     if (n.expr == null) return;
     const own = n.table || null, isCol = n.kind === 'column';
     tokenizeDax(n.expr + '\n' + n.extras).forEach(t => {
-      if (t.t === 'ref') resolve(t, own, isCol).forEach(d => link(n, d));
+      if (t.t === 'ref') { const r = resolve(t, own, isCol); r.forEach(d => link(n, d)); if (!r.length) n.unresolved.push(t.v); }
       else if (t.t === 'string' && n.kind === 'measure') { const d = measureIdx.get(norm(t.val)); if (d && d !== n && t.val.trim()) d.textRefs.push({ where: 'measure', name: n.name }); }
     });
   });
@@ -673,7 +682,7 @@ export function analyze(project) {
     t.status = 'unused'; t.reason = { code: 'tableNone', relationships: linked.size };
   });
 
-  // Aynı formüle sahip ölçüler (kafa karışıklığının en sık kaynağı)
+  // Aynı formüle sahip measure'lar (kafa karışıklığının en sık kaynağı)
   const byFormula = new Map();
   items.filter(n => n.kind === 'measure' && n.expr && n.expr.trim().length > 3).forEach(n => {
     const k = normalizeDax(n.expr); if (!byFormula.has(k)) byFormula.set(k, []); byFormula.get(k).push(n.id);
@@ -683,7 +692,7 @@ export function analyze(project) {
 
   const autoDate = tables.filter(t => t.system).length;
   return {
-    label: project.label, hasModel, hasReport, nodes, items, tables, tableItems, duplicates, autoDate,
+    label: project.label, source: project.source || null, hasModel, hasReport, nodes, items, tables, tableItems, duplicates, autoDate,
     reports: reports.map(r => ({ name: r.name, pages: r.pages, visuals: r.visuals })),
     missing: [...missing.values()], notes: project.notes || [], binary: !!project.binary, live: !!project.live
   };
@@ -702,7 +711,7 @@ function reviewReason(n) {
 /**
  * Seçilen öğeler için güvenli silme sırası ve etkisi.
  * selection: [{kind:'node', id}] ve/veya [{kind:'table', id}]
- * Bir tablo seçildiyse içindeki ölçü ve sütunlar ayrıca silinmez.
+ * Bir tablo seçildiyse içindeki measure ve sütunlar ayrıca silinmez.
  * Sıra: bir öğeyi kullanan öğe, ondan önce silinir.
  */
 export function removalPlan(res, selection) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Ölçü Eleği MCP sunucusu (stdio, salt okunur)
+// Measure Sieve MCP sunucusu (stdio, salt okunur)
 // Web sürümüyle aynı çekirdeği (web/js/core.js) kullanır: aynı dosya, aynı sonuç.
 // Yalnızca izin verilen klasörlerin altındaki dosyaları okur; hiçbir dosyaya yazmaz, ağa çıkmaz.
 //
@@ -11,8 +11,13 @@ import { promises as fs } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { analyzePaths } from './files.mjs';
+import { analyzePaths, readPath } from './files.mjs';
+import { cleanupPlan, buildCleanFiles, verifyCopy, packCopy } from '../web/js/clean.js';
+import { buildQueries, runQueries, findDesktopPorts, pickPort, compareSnapshots, saveSnapshot, loadSnapshot } from './desktop.mjs';
+import { buildProjects, analyze } from '../web/js/core.js';
+import JSZip from 'jszip';
 import { removalPlan, teScript, CANDIDATE, nodeLabel, norm } from '../web/js/core.js';
+import { listNames } from '../web/js/i18n.js';
 import { makeT, reasonText, noteText, usageText } from '../web/js/i18n.js';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
@@ -58,13 +63,13 @@ function summary(t, x) {
     `Rapor / reports: ${x.reports.map(r => `${r.name} (${r.pages}p, ${r.visuals}v)`).join(', ') || '-'}`];
 }
 
-const server = new McpServer({ name: 'olcu-elegi', version: '1.0.0' }, {
-  instructions: 'Ölçü Eleği, Power BI modelinde kullanılmayan ölçü, sütun ve tabloları bulur. Önce modeli_tara ile özet al, gerekirse oge_detayi ile tek bir öğeye bak, silme_plani ile güvenli silme sırasını ve Tabular Editor betiğini üret. Sunucu yalnızca okur; silme işlemini kullanıcı kendisi yapar. Sonuçları "kullanılmıyor gibi görünüyor" diye aktar; yüklenmeyen raporlar ve Excel bağlantıları görülemez. PBIX dosyalarında ölçü listesi okunamaz, PBIT veya PBIP iste.'
+const server = new McpServer({ name: 'measure-sieve', version: '1.0.0' }, {
+  instructions: 'Measure Sieve, Power BI modelinde (PBIX, PBIT, PBIP) kullanılmayan measure, sütun ve tabloları bulur. Akış: modeli_tara ile özet al; oge_detayi ile tek öğeye bak; silme_plani ile sıra ve Tabular Editor betiği üret; temiz_kopya_olustur ile aslına dokunmadan temizlenmiş kopya yaz (PBIT/PBIP; yapısal doğrulama otomatik). Rakamların değişmediğini görmek için Windows\'ta açık Power BI Desktop ile: temizlikten önce degerleri_olc, sonra degerleri_karsilastir. Hiçbir aracı kullanıcı istemeden temizlik için çalıştırma. Sonuçları "kullanılmıyor gibi görünüyor" diye aktar; yüklenmeyen raporlar ve Excel bağlantıları görülemez. PBIX\'e yazılmaz; kopya için PBIP iste.'
 });
 
 server.registerTool('modeli_tara', {
   title: 'Modeli tara',
-  description: 'Power BI modelini ve raporlarını tarar; kullanılmayan gibi görünen ölçü, sütun ve tabloları nedenleriyle listeler. Aynı formüllü ölçüleri ve raporda olup modelde olmayan alanları da bildirir.',
+  description: 'Power BI modelini ve raporlarını tarar; kullanılmayan gibi görünen measure, sütun ve tabloları nedenleriyle listeler. Aynı formüllü measure\'ları ve raporda olup modelde olmayan alanları da bildirir.',
   inputSchema: { yollar: PATHS, model: z.string().optional().describe('Klasörde birden çok model varsa hangisi (ör. Model01)'), dil: LANG, tumu: z.boolean().optional().describe('true: kullanılan öğeleri de listele') },
   annotations: { readOnlyHint: true, openWorldHint: false }
 }, async ({ yollar, model, dil, tumu }) => {
@@ -94,7 +99,7 @@ server.registerTool('modeli_tara', {
 
 server.registerTool('oge_detayi', {
   title: 'Öğe detayı',
-  description: 'Tek bir ölçü, sütun ya da tablonun formülünü, raporda nerelerde kullanıldığını, onu kullanan ve onun kullandığı öğeleri gösterir.',
+  description: 'Tek bir measure, sütun ya da tablonun formülünü, raporda nerelerde kullanıldığını, onu kullanan ve onun kullandığı öğeleri gösterir.',
   inputSchema: { yollar: PATHS, ad: z.string().describe('Öğe adı: "Toplam Satış", "Satış[Tutar]" ya da tablo adı'), model: z.string().optional(), dil: LANG },
   annotations: { readOnlyHint: true, openWorldHint: false }
 }, async ({ yollar, ad, model, dil }) => {
@@ -129,8 +134,8 @@ server.registerTool('silme_plani', {
   description: 'Seçilen öğeler (verilmezse tüm silme adayları) için güvenli silme sırasını, etkilerini, Tabular Editor C# betiğini ve Power Query adımını üretir. Hiçbir şeyi silmez.',
   inputSchema: {
     yollar: PATHS, model: z.string().optional(), dil: LANG,
-    ogeler: z.array(z.string()).optional().describe('Silinecek öğeler: "Ölçü adı", "Tablo[Sütun]" ya da "\'Tablo\'". Boşsa adaylar kullanılır.'),
-    kapsam: z.array(z.enum(['olcu', 'sutun', 'tablo'])).optional().describe('ogeler boşsa hangi türlerin adayları alınsın (varsayılan: olcu)')
+    ogeler: z.array(z.string()).optional().describe('Silinecek öğeler: "Measure adı", "Tablo[Sütun]" ya da "\'Tablo\'". Boşsa adaylar kullanılır.'),
+    kapsam: z.array(z.enum(['measure', 'sutun', 'tablo'])).optional().describe('ogeler boşsa hangi türlerin adayları alınsın (varsayılan: measure)')
   },
   annotations: { readOnlyHint: true, openWorldHint: false }
 }, async ({ yollar, model, dil, ogeler, kapsam }) => {
@@ -145,9 +150,9 @@ server.registerTool('silme_plani', {
       if (n) sel.push({ kind: 'node', id: n.id }); else notFound.push(s);
     });
   } else {
-    const k = new Set(kapsam && kapsam.length ? kapsam : ['olcu']);
+    const k = new Set(kapsam && kapsam.length ? kapsam : ['measure']);
     if (k.has('tablo')) x.tableItems.filter(tb => CANDIDATE(tb.status)).forEach(tb => sel.push({ kind: 'table', id: tb.id }));
-    x.items.filter(n => CANDIDATE(n.status) && n.origin !== 'reportOnly' && ((n.kind === 'measure' && k.has('olcu')) || (n.kind === 'column' && k.has('sutun')))).forEach(n => sel.push({ kind: 'node', id: n.id }));
+    x.items.filter(n => CANDIDATE(n.status) && n.origin !== 'reportOnly' && ((n.kind === 'measure' && k.has('measure')) || (n.kind === 'column' && k.has('sutun')))).forEach(n => sel.push({ kind: 'node', id: n.id }));
   }
   if (!sel.length) return text('Silinecek öğe yok. / Nothing to remove.' + (notFound.length ? ` Bulunamayan: ${notFound.join(', ')}` : ''));
   const plan = removalPlan(x, sel), sc = teScript(x, plan, t);
@@ -163,10 +168,144 @@ server.registerTool('silme_plani', {
   return text(lines.join('\n'));
 });
 
+/* ---------------------------------------------------------------- Temizlenmiş kopya */
+
+async function checkTarget(p) {
+  const abs = path.resolve(p), parent = path.dirname(abs);
+  const real = await fs.realpath(parent);
+  if (!ROOTS.some(r => real === r || real.startsWith(r.endsWith(path.sep) ? r : r + path.sep))) throw new Error(`Kopya izinli klasörlerin dışına yazılamaz / outside allowed folders: ${abs}`);
+  try { await fs.access(abs); throw new Error(`Hedef zaten var, üzerine yazılmaz / target exists: ${abs}`); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  return abs;
+}
+function selectionFrom(x, ogeler, kapsam, notFound) {
+  const sel = [];
+  if (ogeler && ogeler.length) {
+    ogeler.forEach(raw => {
+      const s = raw.trim(), tq = /^'(.+)'$/.exec(s), m = /^'?(.*?)'?\[(.+)\]$/.exec(s);
+      if (tq) { const tb = x.tableItems.find(i => norm(i.name) === norm(tq[1])); if (tb) sel.push({ kind: 'table', id: tb.id }); else notFound.push(s); return; }
+      const n = x.items.find(i => m ? norm(i.table) === norm(m[1]) && norm(i.name) === norm(m[2]) : norm(i.name) === norm(s) && i.kind === 'measure');
+      if (n) sel.push({ kind: 'node', id: n.id }); else notFound.push(s);
+    });
+  } else {
+    const k = new Set(kapsam && kapsam.length ? kapsam : ['measure']);
+    if (k.has('tablo')) x.tableItems.filter(tb => CANDIDATE(tb.status)).forEach(tb => sel.push({ kind: 'table', id: tb.id }));
+    x.items.filter(n => CANDIDATE(n.status) && n.origin !== 'reportOnly' && ((n.kind === 'measure' && k.has('measure')) || (n.kind === 'column' && k.has('sutun')))).forEach(n => sel.push({ kind: 'node', id: n.id }));
+  }
+  return sel;
+}
+
+server.registerTool('temiz_kopya_olustur', {
+  title: 'Temizlenmiş kopya oluştur',
+  description: 'Seçilen (ya da aday) measure\'ları, hesaplanmış sütun ve hesaplanmış tabloları çıkarılmış YENİ bir kopya yazar ve kopyayı yeniden tarayıp aslıyla karşılaştırır (yapısal doğrulama). Aslına dokunmaz, var olan dosyanın üzerine yazmaz. PBIT, PBIP klasörü ve model.bim için çalışır; PBIX için çalışmaz.',
+  inputSchema: {
+    yol: z.string().describe('PBIT dosyası, PBIP klasörü ya da model.bim'), model: z.string().optional(), dil: LANG,
+    ogeler: z.array(z.string()).optional().describe('Kaldırılacak öğeler; boşsa adaylar'),
+    kapsam: z.array(z.enum(['measure', 'sutun', 'tablo'])).optional().describe('ogeler boşsa hangi adaylar (varsayılan: measure)'),
+    hedef: z.string().optional().describe('Kopyanın yolu (varsayılan: aslının yanında .temiz / -temiz)')
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+}, async ({ yol, model, dil, ogeler, kapsam, hedef }) => {
+  const t = makeT(dil || 'tr'), real = await checkPath(yol);
+  const r = await readPath(real);
+  if (r.error) return text(noteText(t, { code: r.error, args: { name: r.label } }).text);
+  const { projects } = buildProjects([r.extraction]);
+  const x0 = projects.find(p => !model || norm(p.label) === norm(model)) || projects[0];
+  if (!x0 || !x0.model) return text('Model bulunamadı. / No model found.');
+  const x = analyze(x0);
+  if (x.source.format === 'pbix') return text(t('c.pbix').replace(/<\/?b>/g, ''));
+  const notFound = [], sel = selectionFrom(x, ogeler, kapsam, notFound);
+  const plan = cleanupPlan(x, sel);
+  const lines = [];
+  if (notFound.length) lines.push(`Bulunamayan / not found: ${notFound.join(', ')}`);
+  if (!plan.removedUnits.length) {
+    lines.push(t('c.none'));
+    plan.skipped.forEach(s => lines.push(`- ${s.label}: ${t('sk.' + s.code, { detail: s.code === 'structural' ? t('what.' + s.detail) : s.detail })}`));
+    return text(lines.join('\n'));
+  }
+  const out = await buildCleanFiles(x, plan.rm);
+  const v = await verifyCopy(x, r.extraction.source, out, plan);
+  const word = (dil || 'tr') === 'tr' ? 'temiz' : 'clean';
+  const st = await fs.stat(real);
+  let target;
+  if (st.isDirectory()) {
+    target = await checkTarget(hedef || `${real}-${word}`);
+    await fs.cp(real, target, { recursive: true, filter: s => !/[\\/]\.pbi[\\/]cache\.abf$/i.test(s) });
+    for (const [rel, bytes] of out.changed) await fs.writeFile(path.join(target, ...rel.split('/')), bytes);
+    for (const rel of out.deleted) await fs.rm(path.join(target, ...rel.split('/')), { force: true });
+  } else if (/\.pbit$/i.test(real)) {
+    target = await checkTarget(hedef || real.replace(/\.pbit$/i, `.${word}.pbit`));
+    await fs.writeFile(target, await packCopy(r.extraction.source, out, JSZip));
+  } else {
+    target = await checkTarget(hedef || real.replace(/(\.[^.]+)$/, `.${word}$1`));
+    const [bytes] = [...out.changed.values()]; await fs.writeFile(target, bytes);
+  }
+  const k = v.counts;
+  lines.push(`${t(v.ok ? 'c.ok' : 'c.fail')} → ${target}`, t('c.counts', { mb: k.before.measure, ma: k.after.measure, cb: k.before.column, ca: k.after.column, tb: k.before.table, ta: k.after.table }));
+  v.checks.forEach(c => lines.push(`${c.ok ? '✓' : '✗'} ${t('chk.' + c.code)}${c.ok ? '' : ': ' + c.items.join(', ')}`));
+  lines.push('', `Kaldırılan / removed (${plan.removed.length}): ${plan.removed.join(', ')}`);
+  if (plan.skipped.length) { lines.push('', t('c.skippedTitle', { n: plan.skipped.length }) + ':'); plan.skipped.slice(0, 60).forEach(s => lines.push(`- ${s.label}: ${t('sk.' + s.code, { detail: s.code === 'structural' ? t('what.' + s.detail) : s.detail })}`)); }
+  lines.push('', t('c.next'));
+  return text(lines.join('\n'));
+});
+
+/* ---------------------------------------------------------------- Sayısal doğrulama */
+
+const snapshots = new Map();
+const winOnly = 'Bu araç yalnızca Windows\'ta, Power BI Desktop açıkken çalışır. / Windows with Power BI Desktop open only.';
+
+server.registerTool('desktop_listele', {
+  title: 'Açık Power BI Desktop pencereleri',
+  description: 'Bu bilgisayarda açık Power BI Desktop pencerelerinin yerel motor portlarını listeler (sayısal doğrulama için).',
+  inputSchema: {}, annotations: { readOnlyHint: true, openWorldHint: false }
+}, async () => {
+  if (process.platform !== 'win32' && !process.env.MEASURE_SIEVE_MOCK) return text(winOnly);
+  const ports = await findDesktopPorts();
+  if (!ports.length) return text('Açık Power BI Desktop bulunamadı. Raporu Desktop\'ta açıp tekrar dene. / No open Power BI Desktop found.');
+  return text(ports.map(p => `- port ${p.port} (açılış ${p.started})`).join('\n'));
+});
+
+server.registerTool('degerleri_olc', {
+  title: 'Değerleri ölç',
+  description: 'Açık Power BI Desktop\'ta rapordaki görsellerin ve kullanılan measure\'ların değerlerini hesaplatıp kaydeder. Temizlikten ÖNCE çalıştır; temizlikten sonra degerleri_karsilastir ile karşılaştır. Yalnızca okur.',
+  inputSchema: { yollar: PATHS.describe('Görsellerin okunacağı rapor dosyası (Desktop\'ta açık olanın PBIX/PBIT/PBIP\'i)'), model: z.string().optional(), port: z.number().int().optional().describe('Boşsa açık Desktop\'lar arasından model tablolarına göre seçilir'), dil: LANG },
+  annotations: { readOnlyHint: true, openWorldHint: false }
+}, async ({ yollar, model, port, dil }) => {
+  if (process.platform !== 'win32' && !process.env.MEASURE_SIEVE_MOCK) return text(winOnly);
+  const r = await load(yollar), x = pickProject(r, model);
+  if (!x || !x.hasModel || !x.hasReport) return text('Model ve rapor birlikte gerekli. / Both model and report are needed.');
+  let chosen = port ? { port } : await pickPort(x, await findDesktopPorts());
+  if (!chosen) return text('Bu modele ait açık bir Power BI Desktop bulunamadı; port ver ya da dosyayı Desktop\'ta aç.');
+  const queries = buildQueries(x);
+  const results = await runQueries(chosen.port, queries);
+  const snap = { label: x.label, port: chosen.port, at: new Date().toISOString(), queries, results };
+  const id = 'olcum-' + (snapshots.size + 1); snapshots.set(id, snap);
+  const file = await saveSnapshot(snap);
+  const bad = results.filter(q => q.error);
+  return text([`Ölçüm kaydedildi / snapshot saved: ${id} (${file})`, `Port ${chosen.port} · ${queries.length} sorgu, ${queries.length - bad.length} başarılı`,
+    ...(bad.length ? ['Çalışmayan sorgular (karşılaştırmaya alınmaz):', ...bad.slice(0, 10).map(b => `- ${(queries.find(q => q.id === b.id) || {}).label}: ${b.error}`)] : []),
+    '', 'Şimdi temizliği uygula (betik ya da temizlenmiş kopya), dosyayı Desktop\'ta açıp yenile, sonra degerleri_karsilastir çağır.'].join('\n'));
+});
+
+server.registerTool('degerleri_karsilastir', {
+  title: 'Değerleri karşılaştır',
+  description: 'degerleri_olc ile alınan ölçümdeki aynı sorguları açık Power BI Desktop\'ta yeniden çalıştırır ve sonuçları satır satır karşılaştırır. Yalnızca okur.',
+  inputSchema: { olcum: z.string().describe('degerleri_olc\'un verdiği kimlik (olcum-1) ya da dosya yolu'), port: z.number().int().optional().describe('Temizlenmiş dosyanın açık olduğu Desktop portu; boşsa ölçümdeki port') },
+  annotations: { readOnlyHint: true, openWorldHint: false }
+}, async ({ olcum, port }) => {
+  if (process.platform !== 'win32' && !process.env.MEASURE_SIEVE_MOCK) return text(winOnly);
+  // Ölçümler yalnızca kendi geçici klasöründen okunur
+  const before = snapshots.get(olcum) || await loadSnapshot(path.join(os.tmpdir(), 'measure-sieve', path.basename(olcum).replace(/(\.json)?$/, '.json')));
+  const results = await runQueries(port || before.port, before.queries);
+  const c = compareSnapshots(before, { results });
+  const why = { missing: 'sonuç yok', error: 'hata', rowCount: 'satır sayısı değişti', value: 'değer değişti' };
+  return text([c.ok ? `✓ Rakamlar aynı: ${c.compared} sorgu karşılaştırıldı, fark yok.` : `✗ ${c.differences.length} farklılık (${c.compared} sorgudan):`,
+    ...c.differences.map(d => `- ${d.label}: ${why[d.why] || d.why}${d.detail ? ' (' + d.detail + ')' : ''}`)].join('\n'));
+});
+
 if (process.argv.includes('--self-test')) {
   // Protokol denetimi tests/mcp.test.mjs içinde yapılır; burada yalnızca açılışı doğrularız.
-  console.error('olcu-elegi-mcp: ok, roots=' + ROOTS.join(';'));
+  console.error('measure-sieve-mcp: ok, roots=' + ROOTS.join(';'));
   process.exit(0);
 }
 await server.connect(new StdioServerTransport());
-console.error('Ölçü Eleği MCP hazır. İzinli klasörler: ' + ROOTS.join(', '));
+console.error('Measure Sieve MCP hazır. İzinli klasörler: ' + ROOTS.join(', '));

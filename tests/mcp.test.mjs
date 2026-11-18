@@ -24,7 +24,7 @@ test('MCP: araçlar listelenir ve örnek PBIT taranır', async () => {
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(here, '../mcp/server.mjs'), dir] }));
   try {
     const tools = (await client.listTools()).tools.map(t => t.name).sort();
-    assert.deepEqual(tools, ['modeli_tara', 'oge_detayi', 'silme_plani']);
+    assert.deepEqual(tools, ['degerleri_karsilastir', 'degerleri_olc', 'desktop_listele', 'modeli_tara', 'oge_detayi', 'silme_plani', 'temiz_kopya_olustur']);
     const scan = (await client.callTool({ name: 'modeli_tara', arguments: { yollar: [file] } })).content[0].text;
     assert.match(scan, /\[Kullanılmıyor gibi\] Satış\[Hedefe Uzaklık\]/);
     assert.match(scan, /Toplam Satış = Ciro|Ciro = Toplam Satış/);
@@ -34,5 +34,33 @@ test('MCP: araçlar listelenir ve örnek PBIT taranır', async () => {
     assert.match(plan, /Measures\["Hedefe Uzaklık"\]\.Delete\(\);/);
     const outside = await client.callTool({ name: 'modeli_tara', arguments: { yollar: [os.homedir() === dir ? '/' : path.join(os.tmpdir(), '..')] } });
     assert.equal(outside.isError, true, 'izinli klasör dışı reddedilir');
+  } finally { await client.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('MCP: temizlenmiş kopya ve sayısal doğrulama (sahte motor)', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'olcu-'));
+  const zip = new JSZip();
+  for (const e of sampleEntries('tr')) zip.file(e.path, await e.read());
+  const file = path.join(dir, 'Satis.pbit');
+  await writeFile(file, await zip.generateAsync({ type: 'nodebuffer' }));
+  const pwsh = process.env.MEASURE_SIEVE_PWSH;
+  const env = { ...process.env, ...(pwsh ? { MEASURE_SIEVE_MOCK: '1' } : {}) };
+  const client = new Client({ name: 'test', version: '1.0.0' });
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(here, '../mcp/server.mjs'), dir], env }));
+  try {
+    const res = (await client.callTool({ name: 'temiz_kopya_olustur', arguments: { yol: file } })).content[0].text;
+    assert.match(res, /Doğrulama geçti/);
+    assert.match(res, /Satis\.temiz\.pbit/);
+    const again = await client.callTool({ name: 'temiz_kopya_olustur', arguments: { yol: file } });
+    assert.match(again.content[0].text, /zaten var|exists/, 'üzerine yazmaz');
+    // Kopya yeniden taranınca kaldırılan measure'lar yok
+    const scan = (await client.callTool({ name: 'modeli_tara', arguments: { yollar: [path.join(dir, 'Satis.temiz.pbit')] } })).content[0].text;
+    assert.doesNotMatch(scan, /Hedefe Uzaklık/);
+    if (pwsh) {
+      const snap = (await client.callTool({ name: 'degerleri_olc', arguments: { yollar: [file], port: 1 } })).content[0].text;
+      const id = /olcum-\d+/.exec(snap)[0];
+      const cmp = (await client.callTool({ name: 'degerleri_karsilastir', arguments: { olcum: id } })).content[0].text;
+      assert.match(cmp, /Rakamlar aynı/);
+    }
   } finally { await client.close(); await rm(dir, { recursive: true, force: true }); }
 });

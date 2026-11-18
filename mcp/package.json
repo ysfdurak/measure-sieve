@@ -1,10 +1,10 @@
 {
-  "name": "olcu-elegi-mcp",
+  "name": "measure-sieve-mcp",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Ölçü Eleği MCP sunucusu: Power BI modelindeki kullanılmayan ölçü, sütun ve tabloları bulur (salt okunur, stdio)",
-  "bin": { "olcu-elegi-mcp": "server.mjs" },
+  "description": "Measure Sieve MCP sunucusu: Power BI modelindeki kullanılmayan measure, sütun ve tabloları bulur; temizlenmiş kopya ve sayısal doğrulama (stdio)",
+  "bin": { "measure-sieve-mcp": "server.mjs" },
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server.mjs",

@@ -1,63 +1,87 @@
-# Ölçü Eleği
+# Measure Sieve
 
-Power BI modelinde hangi ölçü, sütun ve tabloların gerçekten kullanıldığını bulur; kullanılmayanları nedenleriyle ve güvenli silme sırasıyla listeler.
+Power BI modelinde hangi measure, sütun ve tabloların gerçekten kullanıldığını bulur. Kullanılmayanları nedenleriyle ve güvenli silme sırasıyla listeler, istersen bunları çıkarılmış bir kopya üretir ve kopyanın bozulmadığını doğrular.
 
-**Canlı:** https://olcu-elegi.ysfdurak.com · [English](#english)
+**Canlı:** https://measure-sieve.ysfdurak.com · [English](#english)
 
-- Dosyan bilgisayarından çıkmaz. Analiz tarayıcıda yapılır, sunucu yoktur.
-- PBIT, PBIP (TMSL ve TMDL, eski ve yeni PBIR rapor biçimi), model.bim ve PBIX okur.
+- **Dosyan bilgisayarından çıkmaz.** Analiz tarayıcıda yapılır, sunucu yoktur. Veri satırları hiç okunmaz; yalnızca model tanımı.
+- **PBIX, PBIT, PBIP** (TMSL ve TMDL; eski ve PBIR rapor biçimi) ve model.bim okur. PBIX'in sıkıştırılmış modeli tarayıcıda açılır.
 - Aynı klasörde birden çok model ve rapor varsa her raporu kendi modeline bağlar.
-- Aynı formüle sahip ölçüleri ve raporda kullanılıp modelde artık bulunmayan alanları da bildirir.
+- Aynı formüle sahip measure'ları ve raporda kullanılıp modelde artık bulunmayan alanları bildirir.
+- **Temizlenmiş kopya:** PBIT ve PBIP için seçilen measure, hesaplanmış sütun ve hesaplanmış tabloları çıkarılmış yeni bir dosya üretir. Aslına dokunmaz.
+- **Yapısal doğrulama:** Kopyayı yeniden tarar ve aslıyla karşılaştırır. Rapor alanları yerinde mi, formüllerde kırık başvuru var mı, kullanılan bir şey kayboldu mu?
+- **Sayısal doğrulama (MCP, Windows):** Açık Power BI Desktop'ta görsellerin değerlerini temizlikten önce ve sonra hesaplatıp karşılaştırır.
 - Tabular Editor C# betiği ve Power Query `Table.RemoveColumns` adımı üretir.
-- Aynı çekirdek bir MCP sunucusu olarak da çalışır; Claude'a "bu raporda kullanılmayan ölçüler hangileri?" diye sorabilirsin.
+- Aynı çekirdek bir MCP sunucusu olarak da çalışır; Claude'a "bu raporda kullanılmayan measure'lar hangileri?" diye sorabilirsin.
 
 ## Sonuç durumları
 
 | Durum | Anlamı |
 |---|---|
 | Kullanılıyor | Görselde, filtrede, koşullu biçimlendirmede ya da dinamik başlıkta doğrudan kullanılıyor. |
-| Dolaylı kullanım | Kullanılan bir ölçünün formülünde, ilişkide, sıralama sütununda, güvenlik rolünde ya da hesaplama grubunda. |
+| Dolaylı kullanım | Kullanılan bir measure'ın formülünde, ilişkide, sıralama sütununda, güvenlik rolünde ya da hesaplama grubunda. |
 | Kontrol et | Yalnızca gizli sayfada, yer iminde ya da metin olarak geçiyor. Karar senin. |
 | Zincirleme | Yalnızca kullanılmayan başka öğelerin içinde. Onlarla birlikte silinebilir. |
 | Kullanılmıyor gibi | Yüklenen dosyalarda hiçbir kullanımı yok. |
 
-"Kullanılmıyor gibi" kesin hüküm değildir: yüklemediğin raporlar, Excel pivotları, sayfalandırılmış raporlar ve modele dışarıdan yazılan sorgular görülemez. Silmeden önce dosyanın kopyasını al.
+"Kullanılmıyor gibi" kesin hüküm değildir: yüklemediğin raporlar, Excel pivotları, sayfalandırılmış raporlar ve modele dışarıdan yazılan sorgular görülemez.
 
-## Hangi dosyayı yüklemeliyim?
+## Dosya türleri
 
-| Dosya | Ölçü, sütun ve formüller | Rapordaki kullanım |
+| Dosya | Measure, sütun, formül | Rapordaki kullanım | Temizlenmiş kopya |
+|---|---|---|---|
+| PBIX | Var | Var | Yok (aşağıya bak) |
+| PBIT | Var | Var | Var |
+| PBIP klasörü (veya ZIP'i) | Var | Var | Var |
+| model.bim + report.json | Var | Var | Var |
+
+**PBIX'e neden yazılmıyor?** Model, veriyle birlikte özel bir sıkıştırmayla saklanıyor ve Microsoft PBIX'in içini değiştirmeyi desteklemiyor; dosya bozulursa veri de gider. İki yol var:
+1. Power BI Desktop'ta **Dosya › Farklı kaydet › Power BI projesi (.pbip)**, klasörü yükle, temizlenmiş kopyayı oluştur.
+2. Açık dosyada Tabular Editor ile üretilen betiği çalıştır.
+
+Duyarlılık etiketiyle şifrelenmiş dosyalar açılamaz; uygulama bunu söyler.
+
+## Neler otomatik kaldırılır?
+
+| Öğe | Otomatik | Neden |
 |---|---|---|
-| PBIT | Var | Var |
-| PBIP klasörü (veya ZIP'i) | Var | Var |
-| model.bim + report.json | Var | Var |
-| PBIX | Yok (model sıkıştırılmış) | Var |
-
-PBIX'ten PBIT almak için Power BI Desktop'ta **Dosya › Dışarı aktar › Power BI şablonu**. Duyarlılık etiketiyle şifrelenmiş dosyalar açılamaz; uygulama bunu söyler.
+| Model measure'ı | Evet | |
+| Hesaplanmış sütun | Evet | |
+| Hesaplanmış tablo, alan parametresi | Evet | İlişkileri ve perspektif kayıtları da temizlenir |
+| Veri sütunu | Hayır | Power Query'de kaldırılmalı; adım üretilir |
+| İçe aktarılan tablo | Hayır | Sorgusu Power Query'de kaldırılmalı |
+| Rapor measure'ı | Hayır | Raporun içinden kaldırılmalı |
+| Raporda, rolde, ilişkide kullanılan ya da kalan bir öğeyi bozan | Hayır | Güvenlik |
 
 ## Klasör yapısı
 
 ```
-web/           Tarayıcı sürümü (Cloudflare'de olcu-elegi.ysfdurak.com olarak yayınlanır)
-  js/core.js   Analiz çekirdeği: okuyucular, bağımlılık grafiği, silme planı (DOM'a dokunmaz)
-  js/i18n.js   TR/EN metinler; web ve MCP aynı cümleleri kullanır
-  js/sample.js Örnek rapor (gerçek PBIT biçiminde üretilir)
-  js/app.js    Arayüz
-mcp/           MCP sunucusu (Node, stdio, salt okunur)
-tests/         Otomatik testler ve gerçek dosya deneme betiği
-tools/         Tek dosyalık sürüm üretici (claude.ai Artifact)
-docs/          Proje rehberi, MCP kurulumu, gerçek dosya test sonuçları
+web/             Tarayıcı sürümü (Cloudflare'de measure-sieve.ysfdurak.com)
+  js/core.js     Analiz çekirdeği: okuyucular, bağımlılık grafiği, silme planı
+  js/pbix.js     PBIX modeli: Xpress9 açma, ABF içindekiler, metadata SQLite okuyucu
+  js/xpress9.js  Microsoft'un Xpress9 çözücüsü (JavaScript'e derlenmiş; tools/xpress9)
+  js/clean.js    Temizlenmiş kopya (TMSL/TMDL) ve yapısal doğrulama
+  js/i18n.js     TR/EN metinler; web ve MCP aynı cümleleri kullanır
+  js/sample.js   Örnek rapor
+  js/app.js      Arayüz
+mcp/             MCP sunucusu (Node, stdio)
+  desktop.mjs    Sayısal doğrulama: sorgu üretimi ve karşılaştırma
+  desktop.ps1    Power BI Desktop'a bağlanan PowerShell köprüsü (yalnız EVALUATE)
+tests/           Otomatik testler ve gerçek dosya deneme betiği
+tools/           Tek dosyalık sürüm üretici, Xpress9 derleme betiği
+docs/            Proje rehberi, MCP kurulumu, gerçek dosya test sonuçları
 ```
 
 ## Geliştirme
 
 ```bash
-cd mcp && npm install && npm test        # 9 test: çekirdek + MCP protokolü
-node tests/gercek-dosyalar.mjs Rapor.pbit  # kendi dosyanla dene
-cd web && python3 -m http.server 8080      # tarayıcı sürümünü yerelde aç
-node tools/build-artifact.mjs             # dist/olcu-elegi.html
+cd mcp && npm install && npm test          # 14 test: çekirdek, PBIX okuyucu, temizlik, MCP
+node tests/gercek-dosyalar.mjs Rapor.pbix    # kendi dosyanla dene
+cd web && python3 -m http.server 8080        # tarayıcı sürümünü yerelde aç
+node tools/build-artifact.mjs               # dist/measure-sieve.html
 ```
 
-Ayrıntılı anlatım için [docs/PROJE_REHBERI.md](docs/PROJE_REHBERI.md), Claude ile kullanım için [docs/MCP.md](docs/MCP.md).
+Ayrıntılı anlatım: [docs/PROJE_REHBERI.md](docs/PROJE_REHBERI.md) · Claude ile kullanım: [docs/MCP.md](docs/MCP.md) · Test sonuçları: [docs/GERCEK_DOSYA_TESTLERI.md](docs/GERCEK_DOSYA_TESTLERI.md)
 
 ## Lisans
 
@@ -66,7 +90,7 @@ Bu proje [PolyForm Shield 1.0.0](LICENSE.md) lisansıyla yayınlanır. Kaynak ko
 - **Serbest:** Kişiler, okullar ve şirketler kendi işlerinde ücretsiz kullanabilir, değiştirebilir ve kendi bilgisayarlarına ya da sunucularına kurabilir. İzin almak gerekmez.
 - **Yazılı izin gerekir:** Yazılımı satmak, adını değiştirip ürün gibi sunmak ya da bununla (ücretsiz olsa bile) rakip bir ürün veya hizmet sunmak.
 - **Garanti yok:** Yazılım olduğu gibi sunulur. Bağlayıcı olan İngilizce lisans metnidir.
-- Üçüncü taraf bileşenler kendi lisanslarına tabidir (JSZip: MIT; bkz. `web/vendor/README.md`).
+- Üçüncü taraf bileşenler kendi lisanslarına tabidir: JSZip (MIT), Xpress9 çözücüsü (Microsoft, MIT). PBIX okuma mantığı pbixray (MIT) projesinden yararlanılarak yazılmıştır. Bkz. `web/vendor/README.md`.
 
 **Kurum içinde kullanım:** Tarayıcı sürümü sunucu gerektirmez; `web/` klasörünü kurumunuzun iç ağındaki herhangi bir web sunucusunda (IIS, nginx, Apache) yayınlamanız yeterlidir. Power BI dosyaları kullanıcının tarayıcısında kalır. MCP sunucusu her kullanıcının kendi bilgisayarında çalışır ve ağa çıkmaz.
 
@@ -76,18 +100,17 @@ Kurumunuzda kullanıyorsanız haber verirseniz sevinirim: kurulumda yardımcı o
 
 ## English
 
-Ölçü Eleği ("measure sieve") finds which measures, columns and tables in a Power BI model are really used, and lists the unused ones with the reason and a safe removal order.
+Measure Sieve finds which measures, columns and tables in a Power BI model are really used. It lists the unused ones with the reason and a safe removal order, can build a copy without them, and verifies that the copy is not broken.
 
-**Live:** https://olcu-elegi.ysfdurak.com/?lang=en
+**Live:** https://measure-sieve.ysfdurak.com/?lang=en
 
-- Your file never leaves your computer. The analysis runs in the browser; there is no server.
-- Reads PBIT, PBIP (TMSL and TMDL, legacy and PBIR report formats), model.bim and PBIX.
-- Links each report to its own model when a folder holds several models and reports.
-- Also reports measures with identical formulas and fields the report uses but the model no longer has.
-- Produces a Tabular Editor C# script and a Power Query `Table.RemoveColumns` step.
-- The same core runs as an MCP server, so you can ask Claude "which measures are unused in this report?".
-
-"Looks unused" is not a final verdict: reports you did not load, Excel pivots, paginated reports and external queries are invisible to it. Make a copy before removing anything. PBIX files only expose the report side; export a PBIT (**File › Export › Power BI template**) or use PBIP for the full analysis.
+- Your file never leaves your computer. The analysis runs in the browser; no data rows are read, only the model definition.
+- Reads **PBIX, PBIT, PBIP** (TMSL and TMDL, legacy and PBIR reports) and model.bim. The compressed PBIX model is opened in the browser.
+- **Cleaned copy** for PBIT and PBIP: removes the selected measures, calculated columns and calculated tables into a new file; the original is untouched.
+- **Structural verification:** scans the copy again and compares it with the original (report fields, broken formula references, lost items).
+- **Numeric verification (MCP, Windows):** computes visual values in an open Power BI Desktop before and after cleanup and compares them.
+- PBIX files are never written; save as PBIP (File › Save as › Power BI project) or run the generated script in Tabular Editor.
+- The same core runs as an MCP server for Claude.
 
 ### Licence
 

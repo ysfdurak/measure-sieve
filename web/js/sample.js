@@ -1,4 +1,4 @@
-// Ölçü Eleği · örnek rapor
+// Measure Sieve · örnek rapor
 // Gerçek bir PBIT ile aynı biçimde (DataModelSchema + Report/Layout) üretilir; böylece örnek de
 // gerçek dosyalarla aynı okuyucudan geçer. Testler de bu örneği kullanır.
 
@@ -10,7 +10,7 @@ const NAMES = {
     Year: 'Yıl', MonthName: 'Ay Adı', MonthNo: 'Ay No', Week: 'Hafta', Out: 'Çıkış', OnHand: 'Mevcut', Target: 'Hedef',
     mTotal: 'Toplam Satış', mCost: 'Toplam Maliyet', mGross: 'Brüt Kâr', mMargin: 'Kâr Marjı %', mOrders: 'Sipariş Sayısı', mBasket: 'Ortalama Sepet',
     mLY: 'Geçen Yıl Satış', mGrowth: 'Yıllık Büyüme %', mColor: 'Marj Rengi', mTitle: 'Seçili Bölge Başlığı', mOldTarget: 'Eski Hedef', mGap: 'Hedefe Uzaklık',
-    mTest: 'Test Ölçüsü', mDisc: 'Ortalama İskonto', mTurn: 'Stok Devir Hızı', mRevenue: 'Ciro', folder: 'Arşiv',
+    mTest: 'Test Measure', mDisc: 'Ortalama İskonto', mTurn: 'Stok Devir Hızı', mRevenue: 'Ciro', folder: 'Arşiv',
     cmt: '// 2023 bütçe çalışmasından kaldı', titlePrefix: 'Bölge: ', all: 'Tümü',
     pOverview: 'Genel Bakış', pTip: 'Müşteri İpucu', pOld: 'Eski Deneme',
     vRevenue: 'Ciro', vOrders: 'Sipariş', vMonthly: 'Aylık Satış', vProducts: 'Ürün Tablosu', vBasket: 'Sepet', vDisc: 'İskonto', vRegion: 'Bölgeler'

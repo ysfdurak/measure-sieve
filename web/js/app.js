@@ -1,8 +1,9 @@
-// Ölçü Eleği · tarayıcı arayüzü
+// Measure Sieve · tarayıcı arayüzü
 // Dosyaları okur, çekirdeğe (core.js) verir ve sonucu çizer. Hesap yapmaz; tüm kararlar çekirdekte.
 import { extractGroup, buildProjects, analyze, removalPlan, teScript, sniff, STATUS_ORDER, CANDIDATE, norm, nodeLabel, tokenizeDax } from './core.js';
 import { makeT, reasonText, noteText, usageText, listNames, LANGS } from './i18n.js';
 import { sampleEntries, sampleName } from './sample.js';
+import { cleanupPlan, buildCleanFiles, verifyCopy, packCopy } from './clean.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -12,7 +13,7 @@ const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { ret
 /* ---------- Dil ---------- */
 function pickLang() {
   try { const q = new URLSearchParams(location.search).get('lang'); if (LANGS.includes(q)) return q; } catch (e) { /* yok */ }
-  const s = store.get('olcu-elegi.lang'); if (LANGS.includes(s)) return s;
+  const s = store.get('measure-sieve.lang'); if (LANGS.includes(s)) return s;
   return /^tr\b/i.test(navigator.language || 'tr') ? 'tr' : 'en';
 }
 let lang = pickLang(), t = makeT(lang);
@@ -39,7 +40,7 @@ function setProjects(extractions) {
 function selectProject(i) {
   state.pi = i;
   const p = state.projects[i];
-  state.res = p ? analyze(p) : null;
+  state.res = p ? analyze(p) : null; resetClean();
   state.selected = new Set(); state.filter = 'all'; state.q = ''; state.limit = PAGE; $('#search').value = '';
   if (state.res) {
     state.res.items.filter(n => n.kind === 'measure' && CANDIDATE(n.status) && n.origin !== 'reportOnly').forEach(n => state.selected.add(key('node', n.id)));
@@ -70,9 +71,10 @@ async function ingest(items) {
       if (/\.(pbit|pbix|zip)$/i.test(it.file.name)) {
         try { groups.push(await zipGroup(it.file)); }
         catch (err) { notes.push({ code: err && err.code ? err.code : 'notZip', err: true, args: { name: it.file.name } }); }
-      } else if (/\.(json|tmdl|bim|pbir|pbism|pbip)$/i.test(it.file.name)) loose.push(it);
+      } else if (!/(^|\/)\.pbi\/cache\.abf$/i.test(it.path || '')) loose.push(it); // klasörün tamamı: temizlenmiş kopya için gerekir
     }
     if (!groups.length && !loose.length && !notes.length) notes.push({ code: 'unsupported', err: true, args: { name: items[0].file.name } });
+    if (loose.length && !loose.some(i => /\.(json|tmdl|bim|pbir|pbism|pbip)$/i.test(i.file.name))) { notes.push({ code: 'unsupported', err: true, args: { name: loose[0].file.name } }); loose.length = 0; }
     if (loose.length) {
       if (loose.length === 1 && /\.pbip$/i.test(loose[0].file.name)) notes.push({ code: 'pbipPointer', err: true, args: { name: loose[0].file.name } });
       else {
@@ -254,7 +256,52 @@ function renderPanel() {
     ` : `<p class="muted">${esc(t('panel.empty'))}</p>`}
     <button class="btn" type="button" data-copy="tsv">${esc(t('btn.tsv'))}</button>
     <div class="copied" id="copied" role="status"></div>
-    <textarea id="out" readonly hidden aria-label="${esc(t('out.label'))}"></textarea>`;
+    <textarea id="out" readonly hidden aria-label="${esc(t('out.label'))}"></textarea>
+    ${plan.units.length && R.hasModel && R.source ? cleanHtml(R) : ''}`;
+}
+
+/* ---------- Temizlenmiş kopya ---------- */
+function resetClean() { if (state.clean && state.clean.url) URL.revokeObjectURL(state.clean.url); state.clean = null; }
+function cleanHtml(R) {
+  const fmt = R.source.format;
+  let body;
+  if (fmt === 'pbix') body = `<p class="muted" style="font-size:13.5px">${t('c.pbix')}</p>`;
+  else {
+    const c = state.clean;
+    body = `<p class="muted" style="font-size:13.5px">${esc(t('c.lead'))}</p>
+      <button class="btn" type="button" id="buildClean" ${c && c.busy ? 'disabled' : ''}>${esc(c && c.busy ? t('c.busy') : t('c.btn'))}</button>`;
+    if (c && c.err) body += `<div class="impact warn"><b>${esc(t('c.err', { why: c.err }))}</b></div>`;
+    if (c && c.none) body += `<p class="muted" style="font-size:13.5px">${esc(t('c.none'))}</p>`;
+    if (c && c.v) {
+      const v = c.v, k = v.counts;
+      body += `<div class="impact${v.ok ? '' : ' warn'}"><b>${esc(t(v.ok ? 'c.ok' : 'c.fail'))}</b>
+        <span>${esc(t('c.counts', { mb: k.before.measure, ma: k.after.measure, cb: k.before.column, ca: k.after.column, tb: k.before.table, ta: k.after.table }))}</span>
+        <ul class="checks">${v.checks.map(ch => `<li data-ok="${ch.ok}"><span aria-hidden="true">${ch.ok ? '✓' : '✗'}</span> ${esc(t('chk.' + ch.code))}${ch.ok ? '' : ': ' + esc(listNames(t, ch.items, 4))}</li>`).join('')}</ul></div>
+        ${c.url ? `<a class="btn primary" href="${c.url}" download="${esc(c.name)}">${esc(t('c.download', { name: c.name }))}</a><p class="muted" style="font-size:12.5px">${esc(t('c.downloadNote'))}</p>` : ''}
+        <p class="muted" style="font-size:13px">${esc(t('c.next'))}</p>`;
+    }
+    if (c && c.plan && c.plan.skipped.length) {
+      body += `<details class="skipped"><summary>${esc(t('c.skippedTitle', { n: c.plan.skipped.length }))}</summary><ul>${c.plan.skipped.slice(0, 40).map(x => `<li><b>${esc(x.label)}</b> · ${esc(t('sk.' + x.code, { detail: x.code === 'structural' ? t('what.' + x.detail) : x.detail }))}</li>`).join('')}${c.plan.skipped.length > 40 ? `<li>…</li>` : ''}</ul></details>`;
+    }
+  }
+  return `<div class="cleanbox"><h2>${esc(t('c.title'))}</h2>${body}</div>`;
+}
+async function buildClean() {
+  const R = state.res; resetClean(); state.clean = { busy: true }; renderPanel();
+  try {
+    const plan = cleanupPlan(R, selection());
+    if (!plan.removedUnits.length) { state.clean = { none: true, plan }; renderPanel(); return; }
+    const out = await buildCleanFiles(R, plan.rm);
+    const v = await verifyCopy(R, R.source.group, out, plan);
+    const bytes = await packCopy(R.source.group, out, window.JSZip);
+    // Dosya adında Türkçe ve özel karakter kullanma: bazı tarayıcı ve sistemler adı bozar
+    const ascii = x => x.replace(/[çÇğĞıİöÖşŞüÜ]/g, ch => ({ ç: 'c', Ç: 'C', ğ: 'g', Ğ: 'G', ı: 'i', İ: 'I', ö: 'o', Ö: 'O', ş: 's', Ş: 'S', ü: 'u', Ü: 'U' }[ch])).normalize('NFKD').replace(/[^\w.\- ]+/g, '').trim() || 'model';
+    const base = ascii(R.source.group.label.replace(/\.(pbit|zip)$/i, ''));
+    const name = R.source.format === 'pbit' ? `${base}.${lang === 'tr' ? 'temiz' : 'clean'}.pbit` : `${base}-${lang === 'tr' ? 'temiz' : 'clean'}.zip`;
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+    state.clean = { plan, v, url, name };
+  } catch (e) { state.clean = { err: String(e && e.message || e) }; }
+  renderPanel();
 }
 function render() { renderTop(); renderList(); renderPanel(); }
 
@@ -295,24 +342,25 @@ document.addEventListener('click', e => {
   if (el.dataset.filter) { state.filter = el.dataset.filter; state.limit = PAGE; renderTop(); renderList(); return; }
   if (el.dataset.copy) copyOut(el.dataset.copy);
 });
+document.addEventListener('click', e => { if (e.target.closest('#buildClean')) buildClean(); });
 document.addEventListener('change', e => {
-  if (e.target.dataset.sel) { const k = e.target.dataset.sel; e.target.checked ? state.selected.add(k) : state.selected.delete(k); renderPanel(); }
+  if (e.target.dataset.sel) { const k = e.target.dataset.sel; e.target.checked ? state.selected.add(k) : state.selected.delete(k); resetClean(); renderPanel(); }
   if (e.target.id === 'modelSelect') { selectProject(+e.target.value); render(); }
 });
 $('#search').addEventListener('input', e => { state.q = e.target.value; state.limit = PAGE; renderList(); });
 $('#selCand').addEventListener('click', () => {
   if (!state.res || !state.res.hasModel) return;
   sorted().filter(x => CANDIDATE(x.status) && x.origin !== 'reportOnly').forEach(x => state.selected.add(rowKey(x)));
-  renderList(); renderPanel();
+  resetClean(); renderList(); renderPanel();
 });
-$('#selNone').addEventListener('click', () => { state.selected = new Set(); renderList(); renderPanel(); });
+$('#selNone').addEventListener('click', () => { state.selected = new Set(); resetClean(); renderList(); renderPanel(); });
 $('#pickFile').addEventListener('click', () => $('#fileInput').click());
 $('#pickDir').addEventListener('click', () => $('#dirInput').click());
 $('#fileInput').addEventListener('change', e => { ingest([...e.target.files].map(file => ({ file, path: file.name }))); e.target.value = ''; });
 $('#dirInput').addEventListener('change', e => { ingest([...e.target.files].map(file => ({ file, path: file.webkitRelativePath || file.name }))); e.target.value = ''; });
 $('#reset').addEventListener('click', loadSample);
 $('#langSwitch').addEventListener('click', () => {
-  lang = lang === 'tr' ? 'en' : 'tr'; t = makeT(lang); store.set('olcu-elegi.lang', lang);
+  lang = lang === 'tr' ? 'en' : 'tr'; t = makeT(lang); store.set('measure-sieve.lang', lang);
   try { const u = new URL(location.href); if (lang === 'en') u.searchParams.set('lang', 'en'); else u.searchParams.delete('lang'); history.replaceState(null, '', u); } catch (e) { /* çerçeve izin vermeyebilir */ }
   applyStatic();
   if (state.sample) loadSample(); else render();
@@ -336,4 +384,4 @@ async function loadSample() {
 applyStatic();
 loadSample();
 // Testler ve hata ayıklama için
-window.__olcu = { state, ingest };
+window.__sieve = { state, ingest };
