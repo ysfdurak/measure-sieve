@@ -18,17 +18,17 @@ import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn, execFile } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.join(here, '..');
 const req = createRequire(path.join(repo, 'mcp', 'package.json'));
 const JSZip = req('jszip');
-const { readPath } = await import(path.join(repo, 'mcp', 'files.mjs'));
-const core = await import(path.join(repo, 'web', 'js', 'core.js'));
-const { cleanupPlan, buildCleanFiles, verifyCopy } = await import(path.join(repo, 'web', 'js', 'clean.js'));
-const dsk = await import(path.join(repo, 'mcp', 'desktop.mjs'));
+const { readPath } = await import(pathToFileURL(path.join(repo, 'mcp', 'files.mjs')).href);
+const core = await import(pathToFileURL(path.join(repo, 'web', 'js', 'core.js')).href);
+const { cleanupPlan, buildCleanFiles, verifyCopy } = await import(pathToFileURL(path.join(repo, 'web', 'js', 'clean.js')).href);
+const dsk = await import(pathToFileURL(path.join(repo, 'mcp', 'desktop.mjs')).href);
 
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
