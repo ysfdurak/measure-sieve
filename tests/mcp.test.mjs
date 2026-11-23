@@ -4,15 +4,15 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { sampleEntries } from '../web/js/sample.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const req = createRequire(path.join(here, '../mcp/package.json'));
-const { Client } = await import(req.resolve('@modelcontextprotocol/sdk/client/index.js'));
-const { StdioClientTransport } = await import(req.resolve('@modelcontextprotocol/sdk/client/stdio.js'));
-const JSZip = (await import(req.resolve('jszip'))).default;
+const { Client } = await import(pathToFileURL(req.resolve('@modelcontextprotocol/sdk/client/index.js')).href);
+const { StdioClientTransport } = await import(pathToFileURL(req.resolve('@modelcontextprotocol/sdk/client/stdio.js')).href);
+const JSZip = (await import(pathToFileURL(req.resolve('jszip')).href)).default;
 
 test('MCP: araçlar listelenir ve örnek PBIT taranır', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'olcu-'));
