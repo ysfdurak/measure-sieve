@@ -54,14 +54,24 @@ export function buildQueries(res) {
 
 /** PowerShell köprüsünü çalıştırır. Veri UTF-8 geçici dosyalarla taşınır. */
 export async function runQueries(port, queries, { timeoutMs = 300000 } = {}) {
+  const j = await runPs('desktop.ps1', { port, queries: queries.map(q => ({ id: q.id, dax: q.dax })) }, timeoutMs);
+  return j.results;
+}
+
+/** Yalnızca otomatik test için: açık Desktop'ın bellekteki modelinden measure siler (kaydetmez). */
+export async function deleteMeasuresInDesktop(port, measures, { timeoutMs = 120000 } = {}) {
+  return runPs('desktop-tom.ps1', { port, deleteMeasures: measures }, timeoutMs);
+}
+
+async function runPs(script, payload, timeoutMs) {
   if (process.platform !== 'win32' && !process.env.MEASURE_SIEVE_MOCK) throw new Error('windowsOnly');
   const shell = process.env.MEASURE_SIEVE_PWSH || (process.platform === 'win32' ? 'powershell.exe' : 'pwsh');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'measure-sieve-q-'));
   const inFile = path.join(dir, 'in.json'), outFile = path.join(dir, 'out.json');
-  await fs.writeFile(inFile, JSON.stringify({ port, queries: queries.map(q => ({ id: q.id, dax: q.dax })) }), 'utf8');
+  await fs.writeFile(inFile, JSON.stringify(payload), 'utf8');
   try {
     const err = await new Promise((resolve, reject) => {
-      const ps = spawn(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(here, 'desktop.ps1'), '-InFile', inFile, '-OutFile', outFile], { windowsHide: true });
+      const ps = spawn(shell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(here, script), '-InFile', inFile, '-OutFile', outFile], { windowsHide: true });
       let e = '';
       const timer = setTimeout(() => { ps.kill(); reject(new Error('timeout')); }, timeoutMs);
       ps.stdout.on('data', d => { e += d; }); ps.stderr.on('data', d => { e += d; });
@@ -72,7 +82,7 @@ export async function runQueries(port, queries, { timeoutMs = 300000 } = {}) {
     try { txt = await fs.readFile(outFile, 'utf8'); } catch (e) { throw new Error('bridge: ' + String(err).slice(0, 600)); }
     const j = JSON.parse(txt.replace(/^\uFEFF/, ''));
     if (!j.ok) throw new Error(j.error);
-    return j.results;
+    return j;
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 }
 

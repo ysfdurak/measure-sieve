@@ -1,6 +1,6 @@
 {
   "name": "measure-sieve-mcp",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "description": "Measure Sieve MCP sunucusu: Power BI modelindeki kullanılmayan measure, sütun ve tabloları bulur; temizlenmiş kopya ve sayısal doğrulama (stdio)",
@@ -13,7 +13,8 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test ../tests/*.test.mjs",
-    "web": "node ../tools/serve.mjs 8080"
+    "web": "node ../tools/serve.mjs 8080",
+    "desktop-test": "node ../tools/desktop-e2e.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

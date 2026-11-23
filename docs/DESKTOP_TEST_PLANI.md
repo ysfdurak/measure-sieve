@@ -2,6 +2,29 @@
 
 Amaç: Measure Sieve'in gerçek Power BI Desktop'ta ilk kez denenmesi. Her adımda **beklenen** sonuç yazılı; farklı bir şey olursa not al, aynı gün düzeltilecek.
 
+## Otomatik test (önerilen)
+
+`tools/desktop-e2e.mjs` aşağıdaki adımların çoğunu kendi başına yapar ve `Belgeler\MeasureSieve-Test\<tarih>\rapor.md` dosyasını yazar:
+
+1. Örnekleri indirir: Store Sales.pbix, Adventure Works (PBIX ve PBIP), pbip-demo.
+2. Durağan test: tarama, temizlenmiş kopya, yapısal doğrulama.
+3. PBIX: dosyanın kopyasını Desktop'ta açar → Desktop'ın kendi measure listesini bizimkiyle karşılaştırır → değerleri iki kez ölçer → aday measure'ları bellekteki modelden siler → tekrar ölçüp karşılaştırır → **kaydetmeden** kapatır.
+4. PBIP: aslını ve temizlenmiş kopyasını sırayla açar; kopyanın açıldığını, silinenlerin gittiğini, kalanların durduğunu ve sorguların bozulmadığını kontrol eder.
+
+Kurulum (bir kez, repo klasöründe PowerShell ile):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\desktop-e2e-kur.ps1          # bir sonraki oturum açılışında bir kez çalışır
+powershell -ExecutionPolicy Bypass -File tools\desktop-e2e-kur.ps1 -Simdi   # hemen çalıştır
+powershell -ExecutionPolicy Bypass -File tools\desktop-e2e-kur.ps1 -Kaldir  # görevi sil
+```
+
+Görev oturum açıldıktan 2 dakika sonra başlar, yaklaşık 10–20 dakika sürer, sonunda raporu açar ve kendini siler. Bu sırada bilgisayarı kullanabilirsin ama Desktop pencereleri açılıp kapanacak. Senin açık Desktop pencerelerine dokunmaz.
+
+Sınırlar: GitHub'daki PBIP örneklerinde veri önbelleği olmadığı için o testlerde görseller boş açılır. Orada açılma, measure listesi ve sorgu hataları denetlenir, rakamlar PBIX testinde denetlenir. Açılışta Desktop bir iletişim kutusunda beklerse (oturum açma, sürüm yükseltme) test 6 dakika bekleyip o adımı "kaldı" olarak işaretler.
+
+Aşağıdaki elle test listesi, otomatik testin yapamadığı adımlar (Tabular Editor, Farklı kaydet › PBIP) ve sorun çıkarsa ayrıntılı inceleme içindir.
+
 ## Hazırlık
 
 - [ ] Power BI Desktop güncel (sürümü not al: Yardım › Hakkında).

@@ -77,6 +77,7 @@ docs/            Proje rehberi, MCP kurulumu, gerçek dosya test sonuçları
 ```bash
 cd mcp && npm install && npm test          # çekirdek, PBIX okuyucu, temizlik, sayısal doğrulama, MCP
 node tests/gercek-dosyalar.mjs Rapor.pbix    # kendi dosyanla dene
+npm run desktop-test                         # (mcp klasöründe, Windows) Power BI Desktop ile otomatik uçtan uca test
 npm run web                                  # (mcp klasöründe) tarayıcı sürümü: http://localhost:8080
 node tools/build-artifact.mjs               # dist/measure-sieve.html
 ```

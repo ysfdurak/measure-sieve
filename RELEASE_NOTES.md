@@ -1,5 +1,10 @@
 # Sürüm notları
 
+## 1.1.2 · Kasım 2026
+
+- Otomatik Desktop testi (`tools/desktop-e2e.mjs`, `npm run desktop-test`): örnekleri indirir, Desktop'ı kendisi açar, PBIX okuyucuyu Desktop'ın gördüğü measure listesiyle karşılaştırır, değerleri ölçer, aday measure'ları bellekteki modelden silip rakamları karşılaştırır, temizlenmiş PBIP kopyalarını açar; rapor yazar.
+- `tools/desktop-e2e-kur.ps1`: testi bir sonraki oturum açılışında bir kez çalışacak şekilde kurar.
+
 ## 1.1.1 · Kasım 2026 (Desktop testi öncesi)
 
 - Desktop köprüsü: veri UTF-8 geçici dosyalarla taşınıyor (Türkçe karakterler bozulmaz); ADOMD istemcisi çalışan Desktop'ın klasöründen de bulunuyor; sınıf adı DLL içinden okunuyor; eski Desktop sürümlerinde tek açık pencere otomatik seçiliyor.
