@@ -3,7 +3,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import JSZip from 'jszip';
-import { extractGroup, buildProjects, analyze, sniff } from '../web/js/core.js';
+import { extractGroup, buildProjects, analyze, sniff, readZipEntry, entryLimit, LIMITS } from '../web/js/core.js';
 
 const MAX_FILES = 20000;
 const MAX_BYTES = 300 * 1024 * 1024;
@@ -36,13 +36,14 @@ export async function readPath(p) {
     return { label, extraction: await extractGroup({ label, kind: 'folder', entries: await walkDir(p) }) };
   }
   if (/\.pbip$/i.test(p)) return readPath(path.dirname(p));
+  if (st.size > LIMITS.fileBytes) return { label, error: 'tooLarge' };
   const buf = await fs.readFile(p);
   if (/\.(pbit|pbix|zip)$/i.test(p)) {
     const kind = sniff(buf.subarray(0, 8));
     if (kind === 'protected') return { label, error: 'protected' };
     if (kind !== 'zip') return { label, error: 'notZip' };
     const zip = await JSZip.loadAsync(buf); const entries = [];
-    zip.forEach((rel, e) => { if (!e.dir) entries.push({ path: rel, read: () => e.async('uint8array') }); });
+    zip.forEach((rel, e) => { if (!e.dir) entries.push({ path: rel, read: () => readZipEntry(e, entryLimit(rel)) }); });
     return { label, extraction: await extractGroup({ label, kind: 'zip', entries }) };
   }
   if (/\.(bim|json|tmdl)$/i.test(p)) {

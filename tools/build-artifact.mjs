@@ -30,12 +30,16 @@ const body = /<body>([\s\S]*)<\/body>/.exec(html)[1]
   .replace(/<script type="module" src="js\/app\.js"><\/script>/, () => '');
 const js = [];
 for (const f of ORDER) js.push(`// ---- ${f}\n` + wrap(f, await web('js/' + f)));
-const fonts = /<link rel="stylesheet" href="(https:\/\/fonts[^"]+)">/.exec(html)[1];
+// Yazı tipleri depodaki dosyalardan, data: adresi olarak gömülür (dış istek yok)
+let fontCss = await web('fonts/fonts.css');
+for (const m of [...fontCss.matchAll(/url\('([^']+\.woff2)'\)/g)]) {
+  const b64 = (await readFile(path.join(root, 'web', 'fonts', m[1]))).toString('base64');
+  fontCss = fontCss.replace(m[0], `url(data:font/woff2;base64,${b64})`);
+}
 const out = `<title>Measure Sieve</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="${fonts}">
 <style>
+${fontCss}
 ${await web('app.css')}
 </style>
 ${body.trim()}

@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## 1.1.3 · Kasım 2026 (güvenlik temeli)
+
+- Yazı tipleri depoda (Google Fonts kaldırıldı); sayfa hiçbir dış adrese istek atmıyor.
+- Sıkı içerik güvenlik politikası (satır içi stil dahil yok), HSTS, X-Frame-Options, COOP, Permissions-Policy.
+- Dosya okumada boyut sınırları: zip girdileri açılırken sayılır; PBIX parça ve SQLite kayıt boyutları denetlenir.
+- Excel'e kopyalamada formül enjeksiyonuna karşı koruma; HTML özniteliklerine giden her değer kaçışlanıyor.
+- Gizlilik notu, dependabot, GitHub Actions testi (izin: yalnız okuma), zod güvenlik güncellemesi (4.6.7).
+- Portföy güvenlik taraması temiz; tarayıcı kaydı zehirleme testi: tetiklenen yok.
+
 ## 1.1.2 · Kasım 2026
 
 - Otomatik Desktop testi (`tools/desktop-e2e.mjs`, `npm run desktop-test`): örnekleri indirir, Desktop'ı kendisi açar, PBIX okuyucuyu Desktop'ın gördüğü measure listesiyle karşılaştırır, değerleri ölçer, aday measure'ları bellekteki modelden silip rakamları karşılaştırır, temizlenmiş PBIP kopyalarını açar; rapor yazar.

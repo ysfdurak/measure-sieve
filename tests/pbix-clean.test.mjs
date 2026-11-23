@@ -101,3 +101,22 @@ test('Q&A dil verisi, diyagram ve PBIT güvenlik bağı temizlenir', async () =>
   assert.ok(o.deleted.has('SecurityBindings'));
   assert.doesNotMatch(decode(o.changed.get('[Content_Types].xml')), /SecurityBindings/);
 });
+
+test('Güvenlik: zip girdisi açılırken sayılır, sınırı aşan okuma durur', async () => {
+  const { readZipEntry } = await import('../web/js/core.js');
+  const { createRequire } = await import('node:module');
+  const JSZip = createRequire(new URL('../mcp/package.json', import.meta.url))('jszip');
+  const z = new JSZip(); z.file('Report/Layout', new Uint8Array(500000)); // 500 KB sıfır: birkaç yüz bayta sıkışır
+  const zz = await JSZip.loadAsync(await z.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }));
+  await assert.rejects(readZipEntry(zz.file('Report/Layout'), 100000), /tooLarge/);
+  assert.equal((await readZipEntry(zz.file('Report/Layout'), 600000)).length, 500000);
+});
+
+test('Güvenlik: bozuk PBIX parçası ve SQLite kaydı güvenle reddedilir', async () => {
+  const { decompressDataModel, openSqlite } = await import('../web/js/pbix.js');
+  const sig = 'This backup was created using XPress9 compression.';
+  const head = new Uint8Array(102); for (let i = 0; i < sig.length; i++) head[2 * i] = sig.charCodeAt(i);
+  const bad = new Uint8Array(110); bad.set(head); new DataView(bad.buffer).setUint32(102, 0x7fffffff, true); new DataView(bad.buffer).setUint32(106, 4, true);
+  assert.throws(() => decompressDataModel(bad), /badChunk/);
+  assert.throws(() => openSqlite(new TextEncoder().encode('bu bir veritabanı değil')), /notSqlite/);
+});

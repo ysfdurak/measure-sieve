@@ -4,3 +4,9 @@ dist/
 *.pbix
 *.pbit
 .DS_Store
+.env
+.env.*
+!.env.example
+ornekler/
+MeasureSieve-Test/
+*.abf

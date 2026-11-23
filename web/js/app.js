@@ -1,6 +1,6 @@
 // Measure Sieve · tarayıcı arayüzü
 // Dosyaları okur, çekirdeğe (core.js) verir ve sonucu çizer. Hesap yapmaz; tüm kararlar çekirdekte.
-import { extractGroup, buildProjects, analyze, removalPlan, teScript, sniff, STATUS_ORDER, CANDIDATE, norm, nodeLabel, tokenizeDax } from './core.js';
+import { extractGroup, buildProjects, analyze, removalPlan, teScript, sniff, STATUS_ORDER, CANDIDATE, norm, nodeLabel, tokenizeDax, readZipEntry, entryLimit, LIMITS } from './core.js';
 import { makeT, reasonText, noteText, usageText, listNames, LANGS } from './i18n.js';
 import { sampleEntries, sampleName } from './sample.js';
 import { cleanupPlan, buildCleanFiles, verifyCopy, packCopy } from './clean.js';
@@ -53,12 +53,13 @@ function selectProject(i) {
 
 /* ---------- Dosya okuma ---------- */
 async function zipGroup(file) {
+  if (file.size > LIMITS.fileBytes) throw { code: 'tooLarge' };
   const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
   const kind = sniff(head);
   if (kind === 'protected') throw { code: 'protected' };
   if (kind !== 'zip') throw { code: 'notZip' };
   const zip = await window.JSZip.loadAsync(file), entries = [];
-  zip.forEach((p, e) => { if (!e.dir) entries.push({ path: p, read: () => e.async('uint8array') }); });
+  zip.forEach((p, e) => { if (!e.dir) entries.push({ path: p, read: () => readZipEntry(e, entryLimit(p)) }); });
   return { label: file.name, kind: 'zip', entries };
 }
 async function ingest(items) {
@@ -79,7 +80,11 @@ async function ingest(items) {
       if (loose.length === 1 && /\.pbip$/i.test(loose[0].file.name)) notes.push({ code: 'pbipPointer', err: true, args: { name: loose[0].file.name } });
       else {
         const first = loose[0].path || loose[0].file.name, top = first.includes('/') ? first.split('/')[0] : loose[0].file.name;
-        groups.push({ label: top, kind: 'folder', entries: loose.map(i => ({ path: i.path || i.file.name, read: async () => new Uint8Array(await i.file.arrayBuffer()) })) });
+        // Okunacak metin dosyalarına boyut sınırı (veri önbelleği gibi büyük dosyalar yalnız kopyaya aynen aktarılır)
+        groups.push({ label: top, kind: 'folder', entries: loose.map(i => ({ path: i.path || i.file.name, read: async () => {
+          if (i.file.size > (/\.(json|tmdl|bim|pbir|pbism|pbip)$/i.test(i.file.name) ? LIMITS.entryBytes : LIMITS.fileBytes)) throw Object.assign(new Error('tooLarge'), { code: 'tooLarge' });
+          return new Uint8Array(await i.file.arrayBuffer());
+        } })) });
       }
     }
     const extracted = [];
@@ -118,9 +123,9 @@ const itemLabel = x => x.nodes && Array.isArray(x.nodes) ? x.name : (x.kind === 
 /* ---------- Çizim ---------- */
 function renderTabs() {
   const R = state.res, c = k => !R ? 0 : (k === 'table' ? R.tableItems.length : R.items.filter(n => n.kind === k).length);
-  $('#tabs').innerHTML = ['measure', 'column', 'table'].map(k => `<button class="tab" role="tab" type="button" data-tab="${k}" aria-selected="${state.tab === k}">${esc(t('tab.' + k))}<b>${c(k)}</b></button>`).join('');
+  $('#tabs').innerHTML = ['measure', 'column', 'table'].map(k => `<button class="tab" role="tab" type="button" data-tab="${esc(k)}" aria-selected="${esc(state.tab === k)}">${esc(t('tab.' + k))}<b>${c(k)}</b></button>`).join('');
   const mp = $('#modelpick'); mp.hidden = state.projects.length < 2;
-  if (!mp.hidden) $('#modelSelect').innerHTML = state.projects.map((p, i) => `<option value="${i}" ${i === state.pi ? 'selected' : ''}>${esc(p.label)}${p.model ? '' : ' (PBIX)'}</option>`).join('');
+  if (!mp.hidden) $('#modelSelect').innerHTML = state.projects.map((p, i) => `<option value="${esc(i)}" ${i === state.pi ? 'selected' : ''}>${esc(p.label)}${p.model ? '' : ' (PBIX)'}</option>`).join('');
 }
 function renderTop() {
   const R = state.res;
@@ -143,50 +148,50 @@ function renderTop() {
   if (!R.hasReport && R.hasModel) notes.push({ code: 'noReport' });
   let html = notesHtml(notes);
   if (R.duplicates.length && state.tab === 'measure') {
-    html += `<div class="notice info"><b>${esc(t('dup.title', { n: R.duplicates.length }))}</b><span>${esc(t('dup.text'))}</span><div class="links">${R.duplicates.map(g => g.map(id => `<button class="jump" type="button" data-jump="n:${id}">${esc(R.nodes[id].name)}</button>`).join(' = ')).join('<span class="muted">·</span>')}</div></div>`;
+    html += `<div class="notice info"><b>${esc(t('dup.title', { n: R.duplicates.length }))}</b><span>${esc(t('dup.text'))}</span><div class="links">${R.duplicates.map(g => g.map(id => `<button class="jump" type="button" data-jump="n:${esc(id)}">${esc(R.nodes[id].name)}</button>`).join(' = ')).join('<span class="muted">·</span>')}</div></div>`;
   }
   if (R.autoDate && state.tab !== 'measure') html += `<div class="notice info"><b>${esc(t('auto.title', { n: R.autoDate }))}</b><span>${esc(t('auto.text'))}</span></div>`;
   $('#notices').innerHTML = html;
   const list = sorted(), sieve = $('#sieve');
   sieve.classList.toggle('dense', list.length > 80);
   sieve.setAttribute('aria-label', t('tab.' + state.tab));
-  sieve.innerHTML = list.slice(0, 600).map(x => `<button class="cell" type="button" data-s="${x.status}" data-jump="${rowKey(x)}" title="${esc(itemLabel(x))}: ${esc(t('st.' + x.status))}" aria-label="${esc(itemLabel(x))}: ${esc(t('st.' + x.status))}"></button>`).join('');
+  sieve.innerHTML = list.slice(0, 600).map(x => `<button class="cell" type="button" data-s="${esc(x.status)}" data-jump="${esc(rowKey(x))}" title="${esc(itemLabel(x))}: ${esc(t('st.' + x.status))}" aria-label="${esc(itemLabel(x))}: ${esc(t('st.' + x.status))}"></button>`).join('');
   const present = STATUS_ORDER.filter(s => n(s));
-  $('#chips').innerHTML = [`<button class="chip" type="button" data-filter="all" aria-pressed="${state.filter === 'all'}"><b>${items.length}</b> ${esc(t('chip.all'))}</button>`,
-    ...present.map(s => `<button class="chip" type="button" data-filter="${s}" aria-pressed="${state.filter === s}"><span class="cell small" data-s="${s}"></span><b>${n(s)}</b> ${esc(t('st.' + s))}</button>`)].join('');
+  $('#chips').innerHTML = [`<button class="chip" type="button" data-filter="all" aria-pressed="${esc(state.filter === 'all')}"><b>${items.length}</b> ${esc(t('chip.all'))}</button>`,
+    ...present.map(s => `<button class="chip" type="button" data-filter="${esc(s)}" aria-pressed="${esc(state.filter === s)}"><span class="cell small" data-s="${esc(s)}"></span><b>${n(s)}</b> ${esc(t('st.' + s))}</button>`)].join('');
 }
 function notesHtml(notes) {
   const seen = new Set();
   return notes.map(x => noteText(t, x)).filter(x => { const k = x.title + x.text; if (seen.has(k)) return false; seen.add(k); return true; })
-    .map(x => `<div class="notice${x.err ? ' err' : ''}"><b>${esc(x.title)}</b><span>${esc(x.text)}</span></div>`).join('');
+    .map(x => `<div class="notice${esc(x.err ? ' err' : '')}"><b>${esc(x.title)}</b><span>${esc(x.text)}</span></div>`).join('');
 }
 function formulaHtml(n, R) {
-  if (n.expr == null) return `<p class="muted" style="margin:0">${esc(t('d.noFormula'))}</p>`;
+  if (n.expr == null) return `<p class="muted m0">${esc(t('d.noFormula'))}</p>`;
   const html = tokenizeDax(n.expr).map(tok => {
     if (tok.t === 'comment') return `<span class="cm">${esc(tok.v)}</span>`;
     if (tok.t === 'string') return `<span class="st">${esc(tok.v)}</span>`;
     if (tok.t === 'ref') {
       const d = [...n.uses].map(i => R.nodes[i]).find(x => norm(x.name) === norm(tok.name) && (!tok.table || norm(x.table) === norm(tok.table) || x.kind === 'measure'));
-      return d ? `<button class="jump" type="button" data-jump="n:${d.id}">${esc(tok.v)}</button>` : `<span class="rf">${esc(tok.v)}</span>`;
+      return d ? `<button class="jump" type="button" data-jump="n:${esc(d.id)}">${esc(tok.v)}</button>` : `<span class="rf">${esc(tok.v)}</span>`;
     }
     return esc(tok.v);
   }).join('');
   return `<pre class="dax">${html}</pre>`;
 }
-const jumpList = (ids, R) => `<div class="links">${[...ids].map(i => `<button class="jump" type="button" data-jump="n:${i}">${esc(nodeLabel(R.nodes[i]))}</button>`).join('')}</div>`;
+const jumpList = (ids, R) => `<div class="links">${[...ids].map(i => `<button class="jump" type="button" data-jump="n:${esc(i)}">${esc(nodeLabel(R.nodes[i]))}</button>`).join('')}</div>`;
 function detailHtml(x, R) {
   const multi = R.reports.length > 1;
   if (x.nodes && Array.isArray(x.nodes)) {
     const mem = x.nodes.map(i => R.nodes[i]).sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status));
     return `<div class="detail">
       ${x.calculated && x.expr ? `<div><h3>${esc(t('d.tableFormula'))}</h3>${formulaHtml({ expr: x.expr, uses: new Set() }, R)}</div>` : ''}
-      <div><h3>${esc(t('d.members'))}</h3><ul class="members">${mem.map(m => `<li><span class="cell small" data-s="${m.status}"></span><button class="jump" type="button" data-jump="n:${m.id}">${esc(m.name)}</button><span class="muted">${esc(t('kind.' + m.kind))}</span></li>`).join('')}</ul></div>
+      <div><h3>${esc(t('d.members'))}</h3><ul class="members">${mem.map(m => `<li><span class="cell small" data-s="${esc(m.status)}"></span><button class="jump" type="button" data-jump="n:${esc(m.id)}">${esc(m.name)}</button><span class="muted">${esc(t('kind.' + m.kind))}</span></li>`).join('')}</ul></div>
     </div>`;
   }
   const where = x.usages.map(u => { const s = usageText(t, u, multi); return `<li>${esc(s.place)} <span>· ${esc(s.extra)}</span></li>`; });
   x.structural.forEach(s => where.push(`<li>${esc(s.label)} <span>· ${esc(t('what.' + s.what))}</span></li>`));
   [...new Set(x.textRefs.map(r => r.name))].forEach(nm => where.push(`<li>${esc(nm)} <span>· ${esc(t('d.textRef'))}</span></li>`));
-  const formula = x.kind === 'measure' || x.calculated ? formulaHtml(x, R) : `<p class="muted" style="margin:0">${esc(t('d.dataColumn'))}</p>`;
+  const formula = x.kind === 'measure' || x.calculated ? formulaHtml(x, R) : `<p class="muted m0">${esc(t('d.dataColumn'))}</p>`;
   return `<div class="detail">
     <div><h3>${esc(t('d.formula'))}</h3>${formula}</div>
     ${where.length ? `<div><h3>${esc(t('d.where'))}</h3><ul class="uses">${where.join('')}</ul></div>` : ''}
@@ -210,21 +215,21 @@ function renderList() {
     if (!isTable && x.duplicates && x.duplicates.length) tags.push(`<span class="tag dup">${esc(t('tag.dup'))}</span>`);
     const sub = isTable ? '' : (x.table ? esc(x.table) + ' · ' : '');
     const disabled = (!isTable && x.origin === 'reportOnly') || !R.hasModel;
-    return `<li class="row" id="row-${k.replace(':', '-')}">
+    return `<li class="row" id="row-${esc(k.replace(':', '-'))}">
       <div class="rowhead">
-        <input type="checkbox" id="sel-${k.replace(':', '-')}" data-sel="${k}" ${state.selected.has(k) ? 'checked' : ''} aria-label="${esc(t('row.select', { name: itemLabel(x) }))}" ${disabled ? 'disabled' : ''}>
-        <button class="rowmain" type="button" data-toggle="${k}" aria-expanded="${open}">
+        <input type="checkbox" id="sel-${esc(k.replace(':', '-'))}" data-sel="${esc(k)}" ${state.selected.has(k) ? 'checked' : ''} aria-label="${esc(t('row.select', { name: itemLabel(x) }))}" ${disabled ? 'disabled' : ''}>
+        <button class="rowmain" type="button" data-toggle="${esc(k)}" aria-expanded="${esc(open)}">
           <span class="rowname">${esc(x.name)}${tags.join('')}</span>
           <span class="rowwhy">${sub}${esc(reasonText(t, x.reason))}</span>
         </button>
-        <span class="pill" data-s="${x.status}">${esc(t('st.' + x.status))}</span>
+        <span class="pill" data-s="${esc(x.status)}">${esc(t('st.' + x.status))}</span>
       </div>
       ${open ? detailHtml(x, R) : ''}
     </li>`;
   }).join('') : `<li class="empty">${esc(t('empty'))}</li>`;
   $('#more').innerHTML = rows.length > shown.length ? `<button class="btn morebtn" type="button" id="showMore">${esc(lang === 'tr' ? `${rows.length - shown.length} öğe daha göster` : `Show ${rows.length - shown.length} more`)}</button>` : '';
   const miss = R.missing;
-  $('#missing').innerHTML = miss.length ? `<div class="notice err" style="margin-top:12px"><b>${esc(t('miss.title', { n: miss.length }))}</b><span>${esc(t('miss.text', { names: listNames(t, miss.map(m => m.type === 'measure' ? m.name : `${m.table}[${m.name}]`), 6) }))}</span></div>` : '';
+  $('#missing').innerHTML = miss.length ? `<div class="notice err mt12"><b>${esc(t('miss.title', { n: miss.length }))}</b><span>${esc(t('miss.text', { names: listNames(t, miss.map(m => m.type === 'measure' ? m.name : `${m.table}[${m.name}]`), 6) }))}</span></div>` : '';
 }
 function selection() {
   return [...state.selected].map(k => ({ kind: k[0] === 't' ? 'table' : 'node', id: +k.slice(2) }));
@@ -251,8 +256,8 @@ function renderPanel() {
         ${hasData ? `<button class="btn" type="button" data-copy="pq">${esc(t('btn.pq'))}</button>` : ''}
         <button class="btn" type="button" data-copy="list">${esc(t('btn.list'))}</button>
       </div>
-      ${hasData ? `<p class="muted" style="font-size:13px">${esc(t('panel.pqNote'))}</p>` : ''}
-      ${hasReport ? `<p class="muted" style="font-size:13px">${esc(t('panel.reportNote'))}</p>` : ''}
+      ${hasData ? `<p class="muted fs13">${esc(t('panel.pqNote'))}</p>` : ''}
+      ${hasReport ? `<p class="muted fs13">${esc(t('panel.reportNote'))}</p>` : ''}
     ` : `<p class="muted">${esc(t('panel.empty'))}</p>`}
     <button class="btn" type="button" data-copy="tsv">${esc(t('btn.tsv'))}</button>
     <div class="copied" id="copied" role="status"></div>
@@ -265,20 +270,20 @@ function resetClean() { if (state.clean && state.clean.url) URL.revokeObjectURL(
 function cleanHtml(R) {
   const fmt = R.source.format;
   let body;
-  if (fmt === 'pbix') body = `<p class="muted" style="font-size:13.5px">${t('c.pbix')}</p>`;
+  if (fmt === 'pbix') body = `<p class="muted fs135">${t('c.pbix')}</p>`;
   else {
     const c = state.clean;
-    body = `<p class="muted" style="font-size:13.5px">${esc(t('c.lead'))}</p>
+    body = `<p class="muted fs135">${esc(t('c.lead'))}</p>
       <button class="btn" type="button" id="buildClean" ${c && c.busy ? 'disabled' : ''}>${esc(c && c.busy ? t('c.busy') : t('c.btn'))}</button>`;
     if (c && c.err) body += `<div class="impact warn"><b>${esc(t('c.err', { why: c.err }))}</b></div>`;
-    if (c && c.none) body += `<p class="muted" style="font-size:13.5px">${esc(t('c.none'))}</p>`;
+    if (c && c.none) body += `<p class="muted fs135">${esc(t('c.none'))}</p>`;
     if (c && c.v) {
       const v = c.v, k = v.counts;
-      body += `<div class="impact${v.ok ? '' : ' warn'}"><b>${esc(t(v.ok ? 'c.ok' : 'c.fail'))}</b>
+      body += `<div class="impact${esc(v.ok ? '' : ' warn')}"><b>${esc(t(v.ok ? 'c.ok' : 'c.fail'))}</b>
         <span>${esc(t('c.counts', { mb: k.before.measure, ma: k.after.measure, cb: k.before.column, ca: k.after.column, tb: k.before.table, ta: k.after.table }))}</span>
-        <ul class="checks">${v.checks.map(ch => `<li data-ok="${ch.ok}"><span aria-hidden="true">${ch.ok ? '✓' : '✗'}</span> ${esc(t('chk.' + ch.code))}${ch.ok ? '' : ': ' + esc(listNames(t, ch.items, 4))}</li>`).join('')}</ul></div>
-        ${c.url ? `<button class="btn primary" type="button" id="saveClean">${esc(t('c.download', { name: c.name }))}</button><div class="copied" role="status">${esc(c.saveMsg || '')}</div><p class="muted" style="font-size:12.5px">${esc(t('c.downloadNote'))}</p>` : ''}
-        <p class="muted" style="font-size:13px">${esc(t('c.next'))}</p>`;
+        <ul class="checks">${v.checks.map(ch => `<li data-ok="${esc(ch.ok)}"><span aria-hidden="true">${ch.ok ? '✓' : '✗'}</span> ${esc(t('chk.' + ch.code))}${ch.ok ? '' : ': ' + esc(listNames(t, ch.items, 4))}</li>`).join('')}</ul></div>
+        ${c.url ? `<button class="btn primary" type="button" id="saveClean">${esc(t('c.download', { name: c.name }))}</button><div class="copied" role="status">${esc(c.saveMsg || '')}</div><p class="muted fs125">${esc(t('c.downloadNote'))}</p>` : ''}
+        <p class="muted fs13">${esc(t('c.next'))}</p>`;
     }
     if (c && c.plan && c.plan.skipped.length) {
       body += `<details class="skipped"><summary>${esc(t('c.skippedTitle', { n: c.plan.skipped.length }))}</summary><ul>${c.plan.skipped.slice(0, 40).map(x => `<li><b>${esc(x.label)}</b> · ${esc(t('sk.' + x.code, { detail: x.code === 'structural' ? t('what.' + x.detail) : x.detail }))}</li>`).join('')}${c.plan.skipped.length > 40 ? `<li>…</li>` : ''}</ul></details>`;
@@ -311,10 +316,12 @@ function outputs(kind) {
   if (kind === 'list') return plan.labels.map((l, i) => `${i + 1}. ${l}`).join('\n');
   if (kind === 'script') return teScript(R, plan, t).script;
   if (kind === 'pq') return teScript(R, plan, t).powerQuery;
-  const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
+  const clean = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  // Excel formül enjeksiyonuna karşı: =, +, -, @ ile başlayan metne ' eklenir; sayılar olduğu gibi kalır
+  const cell = v => { const x = clean(v); return /^[=+\-@\t\r]/.test(x) && !/^[+-]?\d[\d.,]*$/.test(x) ? "'" + x : x; };
   const rows = [t('tsv.head')];
-  R.items.forEach(n => rows.push([t('kind.' + n.kind), n.table, n.name, t('st.' + n.status), reasonText(t, n.reason), n.usages.length + n.usedBy.size + n.structural.length, n.expr].map(clean).join('\t')));
-  R.tableItems.forEach(x => rows.push([t('kind.table'), '', x.name, t('st.' + x.status), reasonText(t, x.reason), '', ''].map(clean).join('\t')));
+  R.items.forEach(n => rows.push([t('kind.' + n.kind), n.table, n.name, t('st.' + n.status), reasonText(t, n.reason), n.usages.length + n.usedBy.size + n.structural.length, n.expr].map(cell).join('\t')));
+  R.tableItems.forEach(x => rows.push([t('kind.table'), '', x.name, t('st.' + x.status), reasonText(t, x.reason), '', ''].map(cell).join('\t')));
   return rows.join('\n');
 }
 async function copyOut(kind) {
@@ -337,8 +344,8 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-jump],[data-toggle],[data-filter],[data-copy],[data-tab],#showMore'); if (!el) return;
   if (el.id === 'showMore') { state.limit += PAGE; renderList(); return; }
   if (el.dataset.jump) { jumpTo(el.dataset.jump); return; }
-  if (el.dataset.toggle) { const k = el.dataset.toggle; state.open.has(k) ? state.open.delete(k) : state.open.add(k); renderList(); const b = document.querySelector(`[data-toggle="${k}"]`); if (b) b.focus(); return; }
-  if (el.dataset.tab) { state.tab = el.dataset.tab; state.filter = 'all'; state.limit = PAGE; renderTop(); renderList(); document.querySelector(`[data-tab="${state.tab}"]`).focus(); return; }
+  if (el.dataset.toggle) { const k = el.dataset.toggle; state.open.has(k) ? state.open.delete(k) : state.open.add(k); renderList(); const b = document.querySelector(`[data-toggle="${esc(k)}"]`); if (b) b.focus(); return; }
+  if (el.dataset.tab) { state.tab = el.dataset.tab; state.filter = 'all'; state.limit = PAGE; renderTop(); renderList(); document.querySelector(`[data-tab="${esc(state.tab)}"]`).focus(); return; }
   if (el.dataset.filter) { state.filter = el.dataset.filter; state.limit = PAGE; renderTop(); renderList(); return; }
   if (el.dataset.copy) copyOut(el.dataset.copy);
 });

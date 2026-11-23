@@ -84,6 +84,13 @@ node tools/build-artifact.mjs               # dist/measure-sieve.html
 
 Ayrıntılı anlatım: [docs/PROJE_REHBERI.md](docs/PROJE_REHBERI.md) · Desktop test planı: [docs/DESKTOP_TEST_PLANI.md](docs/DESKTOP_TEST_PLANI.md) · Claude ile kullanım: [docs/MCP.md](docs/MCP.md) · Test sonuçları: [docs/GERCEK_DOSYA_TESTLERI.md](docs/GERCEK_DOSYA_TESTLERI.md)
 
+## Güvenlik ve gizlilik
+
+- Dosyan ve sonuçlar hiçbir sunucuya gönderilmez; sayfa çerez, analitik ya da dış yazı tipi kullanmaz.
+- Sıkı içerik güvenlik politikası ve tarayıcı güvenlik başlıkları (`web/_headers`).
+- Dosya okurken boyut sınırları açılırken sayılarak uygulanır (zip bombasına karşı).
+- MCP sunucusu yalnızca izin verilen klasörleri okur; tek yazan araç yeni bir kopya oluşturur, var olan dosyanın üzerine yazmaz.
+
 ## Lisans
 
 Bu proje [PolyForm Shield 1.0.0](LICENSE.md) lisansıyla yayınlanır. Kaynak kodu açıktır, ancak resmi anlamda bir "açık kaynak" lisansı değildir.

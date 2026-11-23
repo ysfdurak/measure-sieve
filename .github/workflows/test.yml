@@ -1,0 +1,21 @@
+name: Testler
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: mcp/package-lock.json }
+      - run: npm ci
+        working-directory: mcp
+      - name: Testler (PowerShell köprüsü dahil)
+        run: npm test
+        working-directory: mcp
+        env: { MEASURE_SIEVE_PWSH: pwsh }
+      - name: Tek dosyalık sürüm derlenir
+        run: node tools/build-artifact.mjs

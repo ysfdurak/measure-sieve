@@ -37,6 +37,26 @@ function tryParse(v) {
   try { return JSON.parse(v); } catch (e) { return null; }
 }
 
+/** Boyut sınırları (zip bombası ve sekmenin kilitlenmesine karşı). Sınır, beyana değil açılırken sayılan bayta uygulanır. */
+export const LIMITS = { modelBytes: 1024 * 1024 * 1024, entryBytes: 200 * 1024 * 1024, fileBytes: 2 * 1024 * 1024 * 1024 };
+
+/**
+ * JSZip girdisini akışla okur ve sayar; sınır aşılınca okumayı durdurur.
+ * Zip başlığındaki "açılmış boyut" beyanına güvenilmez.
+ */
+export function readZipEntry(entry, max) {
+  return new Promise((resolve, reject) => {
+    const parts = []; let total = 0, done = false;
+    const stop = err => { if (done) return; done = true; try { h.pause(); } catch (e) { /* zaten durdu */ } reject(err); };
+    const h = entry.internalStream('uint8array');
+    h.on('data', d => { if (done) return; total += d.length; if (total > max) { stop(Object.assign(new Error('tooLarge'), { code: 'tooLarge' })); return; } parts.push(d); })
+      .on('error', e => stop(e))
+      .on('end', () => { if (done) return; done = true; const out = new Uint8Array(total); let o = 0; parts.forEach(p => { out.set(p, o); o += p.length; }); resolve(out); })
+      .resume();
+  });
+}
+export const entryLimit = path => (/(^|\/)datamodel$/i.test(path) ? LIMITS.modelBytes : LIMITS.entryBytes);
+
 /** Dosyanın ilk baytlarına bakıp ne olduğunu söyler: zip, korumalı (MIP/OLE) ya da bilinmiyor. */
 export function sniff(head) {
   if (head[0] === 0x50 && head[1] === 0x4B) return 'zip';

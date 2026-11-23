@@ -10,6 +10,7 @@
 import * as X9 from './xpress9.js';
 
 const u16 = new TextDecoder('utf-16le'), u8 = new TextDecoder('utf-8');
+const MAX_CHUNK = 64 * 1024 * 1024, MAX_TOTAL = 1536 * 1024 * 1024;
 const SINGLE = 'This backup was created using XPress9 compression.';
 const MULTI = 'This backup was created using multithreaded XPrs9.';
 
@@ -22,11 +23,14 @@ export function decompressDataModel(dm) {
   const sigStream = String.fromCharCode(...dm.subarray(2, 70).filter((b, i) => i % 2 === 0));
   if (sigStream.startsWith('STREAM_STORAGE_SIGNATURE')) return wrapChunks([dm]);
   const groups = [];
-  let pos = 102;
+  let pos = 102, total = 0;
   const readGroup = n => {
     const g = [];
     for (let i = 0; i < n && pos + 8 <= dm.length; i++) {
       const us = dv.getUint32(pos, true), cs = dv.getUint32(pos + 4, true); pos += 8;
+      // Parça boyutları beyandır: makul sınır ve toplam açılmış boyut sınırı (sıkıştırma bombasına karşı)
+      if (us > MAX_CHUNK || cs > MAX_CHUNK || pos + cs > dm.length) throw new Error('badChunk');
+      total += us; if (total > MAX_TOTAL) throw new Error('tooLarge');
       g.push({ us, cs, at: pos }); pos += cs;
     }
     return g;
@@ -128,10 +132,12 @@ export function openSqlite(buf) {
   const payloadOf = (p, P) => {
     const X = usable - 35;
     if (P <= X) return buf.subarray(p, p + P);
+    if (P > buf.length) throw new Error('badRecord'); // kayıt dosyadan büyük olamaz
     const M = Math.floor((usable - 12) * 32 / 255) - 23, K = M + ((P - M) % (usable - 4)), local = K <= X ? K : M;
     const out = new Uint8Array(P); out.set(buf.subarray(p, p + local)); let o = local;
     let next = dv.getUint32(p + local);
-    while (next && o < P) { const base = pageAt(next); const n = Math.min(usable - 4, P - o); out.set(buf.subarray(base + 4, base + 4 + n), o); o += n; next = dv.getUint32(base); }
+    let hops = 0;
+    while (next && o < P && hops++ < buf.length / usable + 1) { const base = pageAt(next); const n = Math.min(usable - 4, P - o); out.set(buf.subarray(base + 4, base + 4 + n), o); o += n; next = dv.getUint32(base); }
     return out;
   };
   const record = (rec, rowid) => {
