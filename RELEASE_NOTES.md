@@ -1,5 +1,11 @@
 # Sürüm notları
 
+## 1.1.4 · Kasım 2026 (ilk Windows testi)
+
+- Windows'ta `npm test` ve Desktop uçtan uca testi, `import()` mutlak yolu kabul etmediği için duruyordu; yollar file:// URL'ye çevrildi.
+- Gerçek Power BI Desktop'ta (2.159, Microsoft Store) otomatik test: 10/10 adım geçti. PBIX measure listesi Desktop ile aynı, silme sonrası rakamlar aynı, temizlenmiş PBIP kopyaları Desktop'ta açılıyor.
+- Canlı sitede güvenlik başlıkları, 404 ve İngilizce sürüm doğrulandı.
+
 ## 1.1.3 · Kasım 2026 (güvenlik temeli)
 
 - Yazı tipleri depoda (Google Fonts kaldırıldı); sayfa hiçbir dış adrese istek atmıyor.

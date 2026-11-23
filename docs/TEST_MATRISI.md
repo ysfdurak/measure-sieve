@@ -9,7 +9,7 @@ PC'deki testlerin hepsi bilgisayar bu sohbete bağlandığında Claude tarafınd
 | # | Özellik | Nasıl denenir | Durum |
 |---|---|---|---|
 | 1.1 | PBIX modeli (Xpress9, ABF, SQLite) | 17 PBIX, pbixray ile karşılaştırma | Bulut ✓ |
-| 1.2 | PBIX measure listesi = Desktop'ın listesi | INFO.MEASURES() ile karşılaştırma (otomatik test) | PC |
+| 1.2 | PBIX measure listesi = Desktop'ın listesi | INFO.MEASURES() ile karşılaştırma (otomatik test) | PC ✓ (23.11.2026) Store Sales 32/32, Adventure Works 1/1 |
 | 1.3 | PBIT | COVID, örnek rapor | Bulut ✓ |
 | 1.4 | PBIP · TMSL (model.bim) | Adventure Works 02 | Bulut ✓ |
 | 1.5 | PBIP · TMDL | Adventure Works 03, pbip-demo | Bulut ✓ |
@@ -48,7 +48,7 @@ PC'deki testlerin hepsi bilgisayar bu sohbete bağlandığında Claude tarafınd
 |---|---|---|---|
 | 4.1 | PBIT / TMSL / TMDL kopya üretimi ve yapısal doğrulama | 6 gerçek kopya | Bulut ✓ |
 | 4.2 | Q&A, diyagram, perspektif, SecurityBindings temizliği | Gerçek dosyalar + testler | Bulut ✓ |
-| 4.3 | PBIP kopyası Desktop'ta açılır, silinenler yok, kalanlar var | Otomatik test | PC |
+| 4.3 | PBIP kopyası Desktop'ta açılır, silinenler yok, kalanlar var | Otomatik test | PC ✓ (23.11.2026) AdventureWorks-PBIP ve pbip-demo: açıldı, 6 silinen yok, 10 kalan yerinde, 22 sorgu aynı |
 | 4.4 | Gerçek veri önbelleğiyle PBIP kopyası yenilemeden açılır, rakamlar aynı | 1.10'daki PBIP'in kopyası | PC |
 | 4.5 | PBIT kopyası Desktop'ta açılır | Desktop'tan alınan PBIT'in kopyası | PC |
 | 4.6 | İndirme: yerel sunucu, Edge/Chrome | `npm run web`, indir, aç | PC |
@@ -77,18 +77,18 @@ PC'deki testlerin hepsi bilgisayar bu sohbete bağlandığında Claude tarafınd
 | # | Özellik | Nasıl denenir | Durum |
 |---|---|---|---|
 | 7.1 | Sorgu üretimi, karşılaştırma, Türkçe karakter taşıma | Sahte motorla PowerShell testi | Bulut ✓ |
-| 7.2 | Açık Desktop'ı bulma (port), ADOMD yükleme | Otomatik test | PC |
-| 7.3 | Ölç → temizle → karşılaştır, fark yok | Otomatik test (PBIX) | PC |
+| 7.2 | Açık Desktop'ı bulma (port), ADOMD yükleme | Otomatik test | PC ✓ (23.11.2026) 4 açılışta port bulundu, ADOMD yüklendi |
+| 7.3 | Ölç → temizle → karşılaştır, fark yok | Otomatik test (PBIX) | PC ✓ (23.11.2026) Store Sales: 12 measure silindi, 27 sorgu, fark yok |
 | 7.4 | Gerçek bir fark yakalanıyor mu (negatif test) | Kullanılan bir measure'ın formülü değiştirilir, fark beklenir | PC |
-| 7.5 | Microsoft Store sürümü ve yükleyici sürümü | Hangisi kuruluysa | PC |
+| 7.5 | Microsoft Store sürümü ve yükleyici sürümü | Hangisi kuruluysa | PC ✓ (23.11.2026) Microsoft Store sürümü 2.159.1231.0 (yükleyici sürümü denenmedi) |
 
 ## 8. Araçlar ve kurulum
 
 | # | Özellik | Nasıl denenir | Durum |
 |---|---|---|---|
-| 8.1 | `npm install`, `npm test` Windows'ta | Komut | PC |
+| 8.1 | `npm install`, `npm test` Windows'ta | Komut | PC ✓ (23.11.2026) Node 24.22.3: 20/20 (ilk denemede Windows yol hatası bulundu ve düzeltildi) |
 | 8.2 | `npm run web` yerel sunucu | Komut + tarayıcı | PC |
-| 8.3 | Otomatik test (`npm run desktop-test`) | Komut | PC |
+| 8.3 | Otomatik test (`npm run desktop-test`) | Komut | PC ✓ (23.11.2026) 10 adım geçti, 0 uyarı |
 | 8.4 | Oturum açılışında çalışan görev, kendini silme | `desktop-e2e-kur.ps1`, sonra `-Kaldir` | PC |
 | 8.5 | `tools/build-artifact.mjs`, `tools/xpress9/build.sh` | Bulutta çalıştırıldı | Bulut ✓ |
 
@@ -96,6 +96,6 @@ PC'deki testlerin hepsi bilgisayar bu sohbete bağlandığında Claude tarafınd
 
 | # | Özellik | Nasıl denenir | Durum |
 |---|---|---|---|
-| 9.1 | Cloudflare Workers dağıtımı, measure-sieve.ysfdurak.com | Canlı adres | Yayın |
-| 9.2 | Güvenlik başlıkları (CSP vb.) gerçek sunucuda, sayfa bozulmadan | Tarayıcı konsolu + başlık kontrolü | Yayın |
-| 9.3 | 404 sayfası, `?lang=en` | Canlı adres | Yayın |
+| 9.1 | Cloudflare Workers dağıtımı, measure-sieve.ysfdurak.com | Canlı adres | Yayın ✓ (23.11.2026) |
+| 9.2 | Güvenlik başlıkları (CSP vb.) gerçek sunucuda, sayfa bozulmadan | Tarayıcı konsolu + başlık kontrolü | Yayın ✓ (23.11.2026) |
+| 9.3 | 404 sayfası, `?lang=en` | Canlı adres | Yayın ✓ (23.11.2026) |
