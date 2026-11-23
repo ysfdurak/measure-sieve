@@ -9,6 +9,8 @@
     "directory": "./web",
     "not_found_handling": "404-page"
   },
+  // Ana dal dışındaki dallarda Cloudflare "wrangler preview" çalıştırır; bu blok olmadan önizleme derlemesi düşer.
+  "previews": {},
   "routes": [
     { "pattern": "measure-sieve.ysfdurak.com", "custom_domain": true }
   ]
