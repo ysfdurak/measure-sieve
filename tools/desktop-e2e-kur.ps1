@@ -1,4 +1,4 @@
-# Measure Sieve · Desktop testini "oturum açılınca bir kez çalış" olarak kurar
+﻿# Measure Sieve · Desktop testini "oturum açılınca bir kez çalış" olarak kurar
 # Kullanım (repo klasöründe, normal PowerShell penceresinde):
 #   powershell -ExecutionPolicy Bypass -File tools\desktop-e2e-kur.ps1            # bir sonraki oturum açılışında bir kez
 #   powershell -ExecutionPolicy Bypass -File tools\desktop-e2e-kur.ps1 -Simdi     # hemen çalıştır (görev kurmadan)

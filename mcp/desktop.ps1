@@ -1,4 +1,4 @@
-# Measure Sieve · Power BI Desktop sorgu köprüsü (yalnızca okur)
+﻿# Measure Sieve · Power BI Desktop sorgu köprüsü (yalnızca okur)
 # Açık Power BI Desktop'ın yerel Analysis Services motoruna bağlanır ve DAX sorgularını çalıştırır.
 # Girdi (-InFile, UTF-8 JSON):  { "port": 51234, "queries": [ { "id": "v1", "dax": "EVALUATE ..." } ] }
 # Çıktı (-OutFile, UTF-8 JSON): { "ok": true, "results": [ { "id": "v1", "columns": [...], "rows": [[...]], "error": null } ] }

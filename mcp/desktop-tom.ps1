@@ -1,4 +1,4 @@
-# Measure Sieve · açık Power BI Desktop modelinden measure silme (YALNIZCA otomatik test için)
+﻿# Measure Sieve · açık Power BI Desktop modelinden measure silme (YALNIZCA otomatik test için)
 # Desktop'ın bellekteki modelinde, Tabular Editor'un yaptığı gibi, verilen measure'ları siler.
 # Dosyaya kaydetmez: test betiği Desktop'ı kaydetmeden kapatır, asıl dosya değişmez.
 # Girdi (-InFile, UTF-8 JSON): { "port": 51234, "deleteMeasures": [ { "table": "Sales", "name": "Cost" } ] }
