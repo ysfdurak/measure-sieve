@@ -138,7 +138,7 @@ export function modelFromBim(json) {
       if (c.type === 'rowNumber' || /^RowNumber-/.test(c.name)) return;
       tbl.columns.push({
         name: c.name, hidden: !!c.isHidden, calculated: c.type === 'calculated', expr: c.type === 'calculated' ? joinExpr(c.expression) : '',
-        sortBy: c.sortByColumn || null, isKey: !!c.isKey,
+        sortBy: c.sortByColumn || null, isKey: !!c.isKey, source: c.type === 'calculated' ? '' : (c.sourceColumn || ''),
         variationTables: (c.variations || []).map(v => v.defaultHierarchy && v.defaultHierarchy.table).filter(Boolean)
       });
     });
@@ -273,7 +273,8 @@ export function modelFromTmdl(files) {
         });
         tbl.columns.push({
           name: o.name, hidden: !!p.isHidden && p.isHidden !== 'false', calculated: o.hasExpr && !!o.expr, expr: o.hasExpr ? o.expr : '',
-          sortBy: typeof p.sortByColumn === 'string' ? tmdlName(p.sortByColumn).name : null, isKey: !!p.isKey && p.isKey !== 'false', variationTables: vt
+          sortBy: typeof p.sortByColumn === 'string' ? tmdlName(p.sortByColumn).name : null, isKey: !!p.isKey && p.isKey !== 'false', variationTables: vt,
+          source: typeof p.sourceColumn === 'string' ? p.sourceColumn.trim().replace(/^'((?:[^']|'')*)'$/, (m, v) => v.replace(/''/g, "'")).replace(/^\[(.*)\]$/, '$1') : ''
         });
       } else if (kw === 'partition') {
         const o = tmdlObject(block, 1);
@@ -536,7 +537,7 @@ export function analyze(project) {
   const mkNode = (kind, d, table, origin) => {
     const n = {
       id: nodes.length, kind, name: d.name, table: table ? table.name : (d.table || ''), tableId: table ? table.id : null, origin,
-      expr: d.expr == null ? null : d.expr, extras: d.extras || '', hidden: !!d.hidden, folder: d.folder || '', calculated: !!d.calculated,
+      expr: d.expr == null ? null : d.expr, extras: d.extras || '', hidden: !!d.hidden, folder: d.folder || '', calculated: !!d.calculated, source: d.source || '',
       usages: [], uses: new Set(), usedBy: new Set(), structural: [], textRefs: [], duplicates: [], unresolved: [], status: 'used', reason: null
     };
     nodes.push(n); if (table) table.nodes.push(n.id); return n;
@@ -781,7 +782,8 @@ export function teScript(res, plan, t) {
     if (n.origin === 'reportOnly') return;
     if (n.kind === 'measure') lines.push(`Model.Tables["${cs(n.table)}"].Measures["${cs(n.name)}"].Delete();`);
     else if (n.calculated) lines.push(`Model.Tables["${cs(n.table)}"].Columns["${cs(n.name)}"].Delete();`);
-    else { if (!pq.has(n.table)) pq.set(n.table, []); pq.get(n.table).push(n.name); }
+    else if (n.tableId != null && res.tables[n.tableId] && res.tables[n.tableId].calculated) lines.push('// ' + t('script.calcTableCol', { name: `${n.table}[${n.name}]` }));
+    else { if (!pq.has(n.table)) pq.set(n.table, []); pq.get(n.table).push(n.source || n.name); } // Power Query'deki ad (sourceColumn); modelde yeniden adlandırılmış olabilir
   });
   let mtext = '';
   if (pq.size) {

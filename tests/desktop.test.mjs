@@ -33,3 +33,12 @@ test('PowerShell köprüsü: Türkçe karakterler bozulmadan gider ve gelir', { 
   const [bad] = await runQueries(1, [{ id: 'y', dax: 'DELETE FROM x' }]);
   assert.equal(bad.error, 'only EVALUATE', 'EVALUATE dışı sorgu gönderilmez');
 });
+
+test('PowerShell betikleri BOM\'lu UTF-8: Windows PowerShell 5.1 Türkçe harfleri bozmasın', async () => {
+  const { readFile } = await import('node:fs/promises');
+  for (const f of ['mcp/desktop.ps1', 'mcp/desktop-tom.ps1', 'tools/desktop-e2e-kur.ps1']) {
+    const b = await readFile(new URL('../' + f, import.meta.url));
+    const nonAscii = b.subarray(3).some(x => x > 127);
+    if (nonAscii) assert.deepEqual([...b.subarray(0, 3)], [0xef, 0xbb, 0xbf], f + ' BOM ile başlamalı');
+  }
+});

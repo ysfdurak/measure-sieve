@@ -242,7 +242,8 @@ export function modelFromMetadata(db) {
   [...C.values()].sort((a, b) => (a.DisplayOrdinal || 0) - (b.DisplayOrdinal || 0)).forEach(c => {
     const tbl = tbls.get(c.TableID), ty = colType(c); if (!tbl || ty === 3) return;
     tbl.columns.push({ name: colName(c), hidden: !!c.IsHidden, calculated: ty === 2, expr: ty === 2 ? (c.Expression || '') : '',
-      sortBy: c.SortByColumnID ? colName(C.get(c.SortByColumnID)) : null, isKey: !!c.IsKey, variationTables: variationTable.get(c.ID) || [] });
+      sortBy: c.SortByColumnID ? colName(C.get(c.SortByColumnID)) : null, isKey: !!c.IsKey, variationTables: variationTable.get(c.ID) || [],
+      source: ty === 2 ? '' : String(c.SourceColumn || '').replace(/^\[(.*)\]$/, '$1') });
   });
   rows('Measure').forEach(m => {
     const tbl = tbls.get(m.TableID); if (!tbl) return;

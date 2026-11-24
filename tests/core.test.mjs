@@ -111,3 +111,16 @@ test('İngilizce metinler', async () => {
   assert.equal(reasonText(t, find(r, 'Total Sales').reason), '3 visual fields');
   assert.equal(reasonText(t, find(r, 'Calendar[Month No]').reason), 'Sort-by column for Calendar[Month Name]');
 });
+
+test('Power Query adımı: modelde yeniden adlandırılmış sütun için kaynaktaki ad kullanılır', async () => {
+  const [r] = await run([
+    entry('M.SemanticModel/definition/tables/Satış.tmdl', "table Satış\n\tmeasure Toplam = SUM(Satış[Tutar])\n\n\tcolumn Tutar\n\t\tdataType: double\n\t\tsourceColumn: Amount\n\n\tcolumn 'Bölge Adı'\n\t\tdataType: string\n\t\tsourceColumn: 'Region Name'\n\n\tcolumn Not\n\t\tdataType: string\n\t\tsourceColumn: Note\n"),
+    entry('M.SemanticModel/definition/tables/Takvim.tmdl', "table Takvim\n\tcolumn Tarih\n\t\tdataType: dateTime\n\t\tsourceColumn: [Tarih]\n\n\tpartition Takvim = calculated\n\t\tmode: import\n\t\tsource = CALENDARAUTO()\n")
+  ]);
+  const unused = r.items.filter(n => n.kind === 'column' && n.origin === 'model' && n.name !== 'Tutar');
+  const sc = teScript(r, removalPlan(r, unused.map(n => ({ kind: 'node', id: n.id }))), makeT('tr'));
+  assert.match(sc.powerQuery, /\{"Region Name", "Note"\}|\{"Note", "Region Name"\}/);
+  assert.doesNotMatch(sc.powerQuery, /Bölge Adı/);
+  assert.doesNotMatch(sc.powerQuery, /Tarih/, 'hesaplanmış tablonun sütunu Power Query adımına girmez');
+  assert.match(sc.script, /hesaplanmış tablonun sütunu.*Takvim\[Tarih\]/);
+});
