@@ -49,6 +49,9 @@ test('silme sırası: kullanan önce silinir, etkiler bildirilir', async () => {
   assert.equal(plan.warnings.length, 0);
   const only = removalPlan(r, [id('Toplam Maliyet')]);
   assert.ok(only.warnings.some(w => w.code === 'breaks' && w.names.includes('Satış[Brüt Kâr]')));
+  const onlySc = teScript(r, only, makeT('tr')).script;
+  assert.doesNotMatch(onlySc, /Measures\["Toplam Maliyet"\]\.Delete/, 'kalan bir öğeyi bozan silme betiğe girmez');
+  assert.match(onlySc, /Atlandı: Satış\[Toplam Maliyet\] silinirse Satış\[Brüt Kâr\] bozulur/);
   const t = makeT('tr');
   const tab = removalPlan(r, [{ kind: 'table', id: r.tableItems.find(x => x.name === 'Stok').id }, id('Stok Devir Hızı'), id('Ürün[Renk]')]);
   const sc = teScript(r, tab, t);

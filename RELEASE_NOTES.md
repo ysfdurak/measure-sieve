@@ -1,5 +1,12 @@
 # Sürüm notları
 
+## 1.1.5 · Kasım 2026 (Windows test turu 2)
+
+- Tabular Editor betiği artık, silinmeyecek bir öğenin kullandığı öğeyi silmiyor; o satır açıklamasıyla yorum olarak kalıyor. Gerçek Desktop'ta bulundu: silinmeyen bir hesaplanmış tablo bozuluyordu.
+- Power Query adımı, sütunun Power Query'deki adını (sourceColumn) kullanıyor; hesaplanmış tablo sütunları adıma girmiyor.
+- `.ps1` dosyaları BOM'lu UTF-8: Windows PowerShell 5.1'de Türkçe iletiler bozulmuyor.
+- Yeni test araçları: `desktop-e2e-ek.mjs` (Desktop'ın kaydettiği gerçek PBIP/PBIT, MCP, negatif test) ve `desktop-e2e-te.mjs` (Tabular Editor 2).
+
 ## 1.1.4 · Kasım 2026 (ilk Windows testi)
 
 - Windows'ta `npm test` ve Desktop uçtan uca testi, `import()` mutlak yolu kabul etmediği için duruyordu; yollar file:// URL'ye çevrildi.
