@@ -1,6 +1,6 @@
 {
   "name": "measure-sieve-mcp",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "private": true,
   "type": "module",
   "description": "Measure Sieve MCP sunucusu: Power BI modelindeki kullanılmayan measure, sütun ve tabloları bulur; temizlenmiş kopya ve sayısal doğrulama (stdio)",

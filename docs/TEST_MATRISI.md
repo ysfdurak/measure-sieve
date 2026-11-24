@@ -38,7 +38,7 @@ PC'deki testlerin hepsi bilgisayar bu sohbete bağlandığında Claude tarafınd
 |---|---|---|---|
 | 3.1 | Silme sırası ve etki uyarıları | Testler | Bulut ✓ |
 | 3.2 | Tabular Editor betiği sözdizimi | Üretilen betik | Bulut ✓ |
-| 3.3 | Tabular Editor betiği açık PBIX'te çalışır, görseller bozulmaz | TE2 › C# Script, sonra rakam karşılaştırma | Kısmen: aynı silme işlemi (TOM ile açık PBIX'ten 12 measure) otomatik testte yapıldı, rakamlar aynı. TE2 kurulu değil; betiğin TE2'de çalışması denenmedi |
+| 3.3 | Tabular Editor betiği açık PBIX'te çalışır, görseller bozulmaz | TE2 › C# Script, sonra rakam karşılaştırma | PC ✓ (24.11.2026) TE 2.29 (imzası doğrulandı): ilk denemede betik, kalan bir hesaplanmış tablonun kullandığı measure'ı sildi, model 2 hata verdi (rakamlar aynıydı). Düzeltildi; ikinci denemede 18 measure + 1 tablo + 1 hesaplanmış sütun silindi, hata yok, 27 sorgu aynı |
 | 3.4 | Power Query adımı (`Table.RemoveColumns`) Desktop'ta çalışır | Power Query Düzenleyicisi'nde uygula | Kısmen: adım üretimi düzeltildi (yeniden adlandırılmış sütunda kaynaktaki ad; hesaplanmış tablo sütunları adıma girmez). Örneklerin veri kaynağı SQL sunucusu olduğu için Desktop'ta yenileme denenemedi → kendi raporunda (2.7) dene |
 | 3.5 | Kopyalama düğmeleri (liste, betik, Excel) gerçek tarayıcıda | Edge/Chrome'da yapıştırma | Kısmen: yerel sunucuda gerçek tıklama; Claude'un tarayıcı panelinde pano kapalı, yedek yol (metin seçili + Ctrl+C iletisi) çalıştı. Edge/Chrome'da elle denenecek |
 
@@ -106,6 +106,7 @@ PC'deki testlerin hepsi bilgisayar bu sohbete bağlandığında Claude tarafınd
 |---|---|---|
 | 23.11.2026 | `import()` Windows mutlak yolunu kabul etmiyordu (`npm test`, Desktop testi) | Düzeltildi (#4) |
 | 24.11.2026 | `.ps1` dosyaları BOM'suz: Windows PowerShell 5.1 Türkçe iletileri bozuyordu | Düzeltildi (#6) |
+| 24.11.2026 | Tabular Editor betiği, silinmeyen bir öğenin (hesaplanmış tablo) kullandığı measure'ı da siliyordu; uyarı ekranda vardı ama betik yine de siliyordu. Artık bu satırlar açıklamalı olarak atlanıyor | Düzeltildi (#7) |
 | 24.11.2026 | Power Query adımı modeldeki sütun adını kullanıyordu; yeniden adlandırılmış sütunda çalışmazdı. Hesaplanmış tablo sütunları da adıma giriyordu | Düzeltildi (#6) |
 
-Ek testler: `tools/desktop-e2e-ek.mjs` (Desktop'ta Farklı kaydet › PBIP ile kaydedilmiş bir klasör ister).
+Ek testler: `tools/desktop-e2e-ek.mjs` (Desktop'ta Farklı kaydet › PBIP ile kaydedilmiş bir klasör ister) ve `tools/desktop-e2e-te.mjs` (Tabular Editor 2 betiği; betiği yapıştırıp çalıştırma adımı elle).

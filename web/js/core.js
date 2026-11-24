@@ -775,7 +775,21 @@ export function teScript(res, plan, t) {
   const cs = s => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const lines = [t('script.head1'), t('script.head2')];
   const pq = new Map();
+  // Silinmeyecek bir öğenin kullandığı öğe betiğe girmez (aksi halde kalan öğe kırık formülle kalır).
+  // Bir öğe atlanınca, onun kullandığı öğeler de atlanır (temizlenmiş kopyadaki kuralın aynısı).
+  const N = res.nodes, inPlan = new Set(), blocked = new Map();
+  plan.units.forEach(u => u.members.forEach(m => inPlan.add(m)));
+  plan.units.forEach(u => u.members.forEach(m => { const out = [...N[m].usedBy].filter(d => !inPlan.has(d)); if (out.length) blocked.set(u, out.map(d => nodeLabel(N[d]))); }));
+  for (let changed = true; changed;) {
+    changed = false;
+    plan.units.forEach(u => {
+      if (blocked.has(u)) return;
+      const keep = [...u.members].flatMap(m => [...N[m].usedBy]).filter(d => [...blocked.keys()].some(b => b.members.has(d)));
+      if (keep.length) { blocked.set(u, [...new Set(keep.map(d => nodeLabel(N[d])))]); changed = true; }
+    });
+  }
   plan.units.forEach(u => {
+    if (blocked.has(u)) { lines.push('// ' + t('script.skipBreaks', { name: labelOf(res, u), names: blocked.get(u).join(', ') })); return; }
     if (u.kind === 'table') { const tb = res.tables[u.id]; lines.push(`Model.Tables["${cs(tb.name)}"].Delete();`); return; }
     const n = res.nodes[u.id];
     if (n.origin === 'report') { lines.push('// ' + t('script.skipReport', { name: n.name })); return; }
