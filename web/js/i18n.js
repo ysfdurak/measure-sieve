@@ -121,6 +121,7 @@ export const DICT = {
     'script.head1': '// Measure Sieve silme betiği. Çalıştırmadan önce modelin bir kopyasını al.',
     'script.head2': '// Sıra önemli: bir öğeyi kullanan öğe, ondan önce silinir.',
     'script.skipReport': 'Atlandı (rapor measure\'ı, raporun içinden kaldır): {name}',
+    'script.calcTableCol': 'Atlandı (hesaplanmış tablonun sütunu; tablonun DAX formülünden çıkar): {name}',
     'script.pqNote': 'Bu veri sütunlarını Power Query\'de kaldır (Sütunları kaldır), modelden silmek yenilemede geri getirebilir:',
     'script.prevStep': 'Önceki adım'
   },
@@ -243,6 +244,7 @@ export const DICT = {
     'script.head1': '// Measure Sieve removal script. Make a copy of the model before running it.',
     'script.head2': '// Order matters: an item is removed before the items it uses.',
     'script.skipReport': 'Skipped (report measure, remove it inside the report): {name}',
+    'script.calcTableCol': 'Skipped (column of a calculated table; remove it from the table\'s DAX formula): {name}',
     'script.pqNote': 'Remove these data columns in Power Query (Remove columns); deleting them from the model may bring them back on refresh:',
     'script.prevStep': 'Previous step'
   }
