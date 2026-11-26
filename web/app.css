@@ -188,7 +188,7 @@ footer { border-top: 1px solid var(--line); padding-top: 16px; display: flex; fl
 .docmode { display: grid; gap: 16px }
 .dochead { display: grid; gap: 10px }
 .dochead h2 { font-size: clamp(20px, 2.4vw, 26px); font-weight: 600; line-height: 1.25 }
-.exportbox { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 10px 24px; align-items: end }
+.exportbox { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 10px 24px; align-items: start }
 .exportbox > div:first-child { grid-row: span 2 }
 .exportbox h2 { font-size: 17px }
 .exfields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
