@@ -197,7 +197,8 @@ export function measuresHtml(t, R, L, EX, ds) {
   const all = R.nodes.filter(n => n.kind === 'measure' && n.origin !== 'reportOnly').sort((a, b) => (a.table || '').localeCompare(b.table || '') || a.name.localeCompare(b.name));
   const author = [...EX.values()].filter(x => x.by === 'author').length, rule = EX.size - author;
   const q = norm(ds.q || '');
-  const list = all.filter(n => !q || norm(n.name).includes(q) || norm(n.table).includes(q) || norm((EX.get(n.id) || {}).text || '').includes(q));
+  const missing = all.filter(n => !EX.get(n.id)).length;
+  const list = all.filter(n => (!ds.noExp || !EX.get(n.id)) && (!q || norm(n.name).includes(q) || norm(n.table).includes(q) || norm((EX.get(n.id) || {}).text || '').includes(q)));
   const visOf = new Map(); L.visuals.forEach(v => v.nodeIds.forEach(id => { if (!visOf.has(id)) visOf.set(id, []); visOf.get(id).push(v); }));
   const items = list.slice(0, 300).map(n => {
     const e = EX.get(n.id), vs = visOf.get(n.id) || [];
@@ -211,7 +212,8 @@ export function measuresHtml(t, R, L, EX, ds) {
     </li>`;
   }).join('');
   return `<p class="muted">${esc(t('ms.lead', { a: EX.size, n: all.length, au: author, ru: rule }))}</p>
-    <input class="search" id="msSearch" type="search" value="${esc(ds.q || '')}" placeholder="${esc(t('ms.filter'))}" aria-label="${esc(t('ms.filter'))}">
+    <div class="listhead"><input class="search" id="msSearch" type="search" value="${esc(ds.q || '')}" placeholder="${esc(t('ms.filter'))}" aria-label="${esc(t('ms.filter'))}">
+    ${missing ? `<label class="check"><input type="checkbox" id="msNoExp" ${ds.noExp ? 'checked' : ''}> ${esc(t('ms.noExp', { n: missing }))}</label>` : ''}</div>
     <ul class="mlist">${items || `<li class="empty">${esc(t('empty'))}</li>`}</ul>${list.length > 300 ? `<p class="muted fs13">+${list.length - 300}</p>` : ''}`;
 }
 

@@ -1,6 +1,9 @@
 # Measure Sieve
 
-Power BI modelinde hangi measure, sütun ve tabloların gerçekten kullanıldığını bulur. Kullanılmayanları nedenleriyle ve güvenli silme sırasıyla listeler, istersen bunları çıkarılmış bir kopya üretir ve kopyanın bozulmadığını doğrular.
+Power BI modelini iki açıdan ele alır:
+
+- **Temizle:** Hangi measure, sütun ve tabloların gerçekten kullanıldığını bulur. Kullanılmayanları nedenleriyle ve güvenli silme sırasıyla listeler, istersen bunları çıkarılmış bir kopya üretir ve kopyanın bozulmadığını doğrular.
+- **Belgele:** Modelin ne yaptığını gösterir. Bir sayının hangi kaynaktan geldiğini (veri soyağacı), tabloların nasıl bağlandığını, measure'ların ne hesapladığını anlatır ve raporu devralacak kişi için tek dosyalık bir devir belgesi üretir.
 
 **Canlı:** https://measure-sieve.ysfdurak.com · [English](#english)
 
@@ -12,7 +15,20 @@ Power BI modelinde hangi measure, sütun ve tabloların gerçekten kullanıldı�
 - **Yapısal doğrulama:** Kopyayı yeniden tarar ve aslıyla karşılaştırır. Rapor alanları yerinde mi, formüllerde kırık başvuru var mı, kullanılan bir şey kayboldu mu?
 - **Sayısal doğrulama (MCP, Windows):** Açık Power BI Desktop'ta görsellerin değerlerini temizlikten önce ve sonra hesaplatıp karşılaştırır.
 - Tabular Editor C# betiği ve Power Query `Table.RemoveColumns` adımı üretir.
-- Aynı çekirdek bir MCP sunucusu olarak da çalışır; Claude'a "bu raporda kullanılmayan measure'lar hangileri?" diye sorabilirsin.
+- Aynı çekirdek bir MCP sunucusu olarak da çalışır; Claude'a "bu raporda kullanılmayan measure'lar hangileri?" ya da "Ciro kartındaki sayı nereden geliyor?" diye sorabilirsin.
+
+## Belgele
+
+| Bölüm | Ne gösterir |
+|---|---|
+| Soyağacı | Kaynak → Power Query sorgusu → tablo → measure/sütun → görsel. Görselden kaynağa ("bu sayı nereden geliyor?") ve kaynaktan görsele ("bu dosya değişirse ne etkilenir?") |
+| Kaynaklar | Excel, CSV, SQL, SharePoint, web vb. konumlar, parametreler, kaynağı doğrudan görünmeyen sorgular ve M kodu |
+| Tablolar ve ilişkiler | İlişki diyagramı (filtre yönü, kardinalite), çift yönlü / çoka çok / pasif ilişki ve ilişkisiz tablo uyarıları |
+| Measure açıklamaları | Modeldeki açıklama varsa o; yoksa formülden **kural tabanlı** Türkçe/İngilizce açıklama. Emin olunmayan formül açıklanmaz |
+| Sayfalar | Sayfa sayfa görseller ve kullandıkları alanlar |
+| Devir belgesi | Markdown ya da yazdırılabilir HTML (tarayıcıdan PDF). Betik içermez, açıldığında hiçbir yere bağlanmaz |
+
+Kaynaklar M kodundan metin olarak okunur; M kodu hiçbir zaman çalıştırılmaz. Doğrudan açmak için: https://measure-sieve.ysfdurak.com/#belgele
 
 ## Sonuç durumları
 
@@ -61,6 +77,11 @@ web/             Tarayıcı sürümü (Cloudflare'de measure-sieve.ysfdurak.com)
   js/pbix.js     PBIX modeli: Xpress9 açma, ABF içindekiler, metadata SQLite okuyucu
   js/xpress9.js  Microsoft'un Xpress9 çözücüsü (JavaScript'e derlenmiş; tools/xpress9)
   js/clean.js    Temizlenmiş kopya (TMSL/TMDL) ve yapısal doğrulama
+  js/lineage.js  Belgele: M kodundan kaynak çıkarma, iki yönlü soyağacı, ilişki uyarıları
+  js/explain.js  Belgele: kural tabanlı DAX açıklaması (küçük ayrıştırıcı + TR/EN kalıplar)
+  js/diagram.js  Belgele: bağımlılıksız SVG ilişki diyagramı
+  js/docview.js  Belgele sekmesinin HTML'i
+  js/docgen.js   Devir belgesi: Markdown ve yazdırılabilir HTML
   js/i18n.js     TR/EN metinler; web ve MCP aynı cümleleri kullanır
   js/sample.js   Örnek rapor
   js/app.js      Arayüz
@@ -108,7 +129,7 @@ Kurumunuzda kullanıyorsanız haber verirseniz sevinirim: kurulumda yardımcı o
 
 ## English
 
-Measure Sieve finds which measures, columns and tables in a Power BI model are really used. It lists the unused ones with the reason and a safe removal order, can build a copy without them, and verifies that the copy is not broken.
+Measure Sieve looks at a Power BI model in two ways. **Clean up** finds which measures, columns and tables are really used, lists the unused ones with the reason and a safe removal order, can build a copy without them and verifies that the copy is not broken. **Document** shows what the model does: where a number comes from (data lineage from source through Power Query, tables and measures to the visual, in both directions), how tables are related (diagram and warnings), what each measure calculates (the model's own description, or a rule-based explanation from the formula), and builds a one-file handover document (Markdown or printable HTML).
 
 **Live:** https://measure-sieve.ysfdurak.com/?lang=en
 

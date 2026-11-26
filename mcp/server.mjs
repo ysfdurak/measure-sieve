@@ -67,7 +67,7 @@ function summary(t, x) {
     `Rapor / reports: ${x.reports.map(r => `${r.name} (${r.pages}p, ${r.visuals}v)`).join(', ') || '-'}`];
 }
 
-const server = new McpServer({ name: 'measure-sieve', version: '1.0.0' }, {
+const server = new McpServer({ name: 'measure-sieve', version: '1.2.0' }, {
   instructions: 'Measure Sieve, Power BI modelinde (PBIX, PBIT, PBIP) kullanılmayan measure, sütun ve tabloları bulur. Akış: modeli_tara ile özet al; modeli anlamak için soyagaci (bir sayı nereden geliyor, bir kaynak değişirse ne etkilenir) ve devir_belgesi (kaynaklar, ilişkiler, measure açıklamaları, sayfalar); oge_detayi ile tek öğeye bak; silme_plani ile sıra ve Tabular Editor betiği üret; temiz_kopya_olustur ile aslına dokunmadan temizlenmiş kopya yaz (PBIT/PBIP; yapısal doğrulama otomatik). Rakamların değişmediğini görmek için Windows\'ta açık Power BI Desktop ile: temizlikten önce degerleri_olc, sonra degerleri_karsilastir. Hiçbir aracı kullanıcı istemeden temizlik için çalıştırma. Sonuçları "kullanılmıyor gibi görünüyor" diye aktar; yüklenmeyen raporlar ve Excel bağlantıları görülemez. PBIX\'e yazılmaz; kopya için PBIP iste.'
 });
 

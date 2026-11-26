@@ -341,7 +341,11 @@ function render() { renderMode(); renderTop(); renderList(); renderPanel(); rend
 function setMode(m, opts = {}) {
   state.mode = m; renderMode(); if (m === 'doc') renderDoc(); else { renderTop(); renderList(); renderPanel(); }
   try { history.replaceState(null, '', m === 'doc' ? '#' + (lang === 'tr' ? 'belgele' : 'document') : location.pathname + location.search); } catch (e) { /* çerçeve izin vermeyebilir */ }
-  if (opts.focus !== false) { const el = document.querySelector(`[data-mode="${m}"]`); if (el) el.focus(); }
+  if (opts.focus !== false) {
+    const el = document.querySelector(`[data-mode="${m}"]`); if (el) el.focus({ preventScroll: true });
+    // Telefonda mod içeriği ilk ekranın altında kalıyordu: seçim çubuğunu üste getir
+    const bar = $('#modes'); if (bar && bar.getBoundingClientRect().top > innerHeight * 0.35) bar.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
 }
 /** Belgele: bir başlangıçtan soyağacını aç */
 function openLineage(kind, id) {
@@ -438,6 +442,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'linStart') { const [k, id] = e.target.value.split(':'); state.doc.start = { kind: k, id: +id }; renderDocBody(); const s = $('#linStart'); if (s) s.focus(); }
 });
 document.addEventListener('input', e => {
+  if (e.target.id === 'msNoExp') { state.doc.noExp = e.target.checked; renderDocBody(); const s = $('#msNoExp'); if (s) s.focus(); return; }
   if (e.target.id === 'msSearch') { state.doc.q = e.target.value; const pos = e.target.selectionStart; renderDocBody(); const s = $('#msSearch'); if (s) { s.focus(); s.setSelectionRange(pos, pos); } }
   if (e.target.id === 'exBy') state.doc.by = e.target.value;
   if (e.target.id === 'exTo') state.doc.to = e.target.value;

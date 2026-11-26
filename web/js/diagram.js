@@ -60,7 +60,9 @@ export function relationshipLayout(res) {
   });
   const pos = new Map(nodes.map(n => [n.key, n]));
   const edges = rels.map((r, i) => ({ i, a: pos.get(norm(r.fromTable)), b: pos.get(norm(r.toTable)), r })).filter(e => e.a && e.b);
-  const width = PAD * 2 + (keys[keys.length - 1] - minC) * COLW + W;
+  // Aynı sütundaki iki tablo arasındaki ilişki sağa doğru bir yay çizer; yay kesilmesin diye en sağda pay bırak
+  const sameCol = edges.some(e => e.a.x === e.b.x);
+  const width = PAD * 2 + (keys[keys.length - 1] - minC) * COLW + W + (sameCol ? 56 : 0);
   return { nodes, edges, width, height };
 }
 
@@ -73,7 +75,7 @@ export function relationshipSvg(layout, labels, opts = {}) {
   const { nodes, edges, width, height } = layout;
   const short = s => (s.length > 22 ? s.slice(0, 21) + '…' : s);
   const parts = [];
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" class="reldiagram" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${esc(labels.title)}">`);
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" class="reldiagram" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="${opts.link ? 'group' : 'img'}" aria-label="${esc(labels.title)}">`);
   parts.push(`<defs><marker id="ms-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>`);
   // Çizgiler önce (kutuların altında kalsın)
   edges.forEach(e => {
@@ -94,7 +96,7 @@ export function relationshipSvg(layout, labels, opts = {}) {
     parts.push(`<text class="card" x="${off(bx, ax)}" y="${by - 6}" text-anchor="${ax >= bx ? 'start' : 'end'}">${card(r.toCard)}</text>`);
   });
   nodes.forEach(n => {
-    const link = opts.link ? ` data-table="${esc(n.table)}" tabindex="0" role="button"` : '';
+    const link = opts.link ? ` data-table="${esc(n.table)}" tabindex="0" role="button" aria-label="${esc(n.name)}: ${esc(labels.cols(n.columns, n.measures))}"` : '';
     parts.push(`<g class="tbl${n.fact ? ' fact' : ''}"${link}><title>${esc(n.name)}</title><rect x="${n.x}" y="${n.y}" width="${W}" height="${H}" rx="8"/>`
       + `<text class="tname" x="${n.x + 12}" y="${n.y + 19}">${esc(short(n.name))}</text>`
       + `<text class="tsub" x="${n.x + 12}" y="${n.y + 36}">${esc(labels.cols(n.columns, n.measures))}</text></g>`);
