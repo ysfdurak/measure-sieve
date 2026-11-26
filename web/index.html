@@ -44,6 +44,21 @@
     </div>
   </header>
 
+  <div class="modes" role="tablist" id="modes" data-i18n-attr="aria-label:mode.label">
+    <button class="mode" role="tab" type="button" data-mode="clean" aria-selected="true"><b data-i18n="mode.clean">Temizle</b><span data-i18n="mode.cleanSub">Neyi silebilirim?</span></button>
+    <button class="mode" role="tab" type="button" data-mode="doc" aria-selected="false"><b data-i18n="mode.doc">Belgele</b><span data-i18n="mode.docSub">Bu model ne yapıyor?</span></button>
+  </div>
+
+  <section class="docmode" id="docmode" hidden aria-live="polite">
+    <div class="dochead">
+      <h2 id="docHead"></h2>
+      <div class="notices" id="docNotices"></div>
+    </div>
+    <div class="tabs" role="tablist" id="dtabs" data-i18n-attr="aria-label:doc.tabs"></div>
+    <div class="docbody" id="docBody"></div>
+    <div id="exportBox"></div>
+  </section>
+
   <section class="verdict" aria-live="polite">
     <div class="vhead">
       <div class="tabs" role="tablist" id="tabs" data-i18n-attr="aria-label:tabs.label"></div>
@@ -56,7 +71,7 @@
     <div class="chips" id="chips"></div>
   </section>
 
-  <section class="work">
+  <section class="work" id="work">
     <div class="minw0">
       <div class="listhead">
         <input class="search" id="search" type="search" data-i18n-attr="placeholder:search,aria-label:search">

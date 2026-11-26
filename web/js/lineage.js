@@ -92,6 +92,10 @@ const CONNECTORS = [
  */
 export function sourcesOfM(expr, params = new Map(), queryNames = new Set()) {
   const s = stripMComments(expr), found = [], taken = [];
+  const noStrings = s.replace(/(#?)"(?:[^"]|"")*"/g, (m0, hash) => (hash ? m0 : '""'));
+  // let içinde tanımlanan adımlar (#"Ad" = … ya da Ad = …)
+  const defined = new Set(); let dm; const defRe = /#"((?:[^"]|"")*)"\s*=(?!=)|(?:^|[\s,])([A-Za-z_\u00C0-\uFFFF][\w\u00C0-\uFFFF]*)\s*=(?!=)/g;
+  while ((dm = defRe.exec(noStrings))) defined.add(norm((dm[1] != null ? dm[1].replace(/""/g, '"') : dm[2])));
   // Bağlayıcı aranırken metinlerin içi boşlukla maskelenir (konumlar aynı kalır)
   const masked = s.replace(/"(?:[^"]|"")*"/g, m0 => '"' + ' '.repeat(m0.length - 2) + '"');
   CONNECTORS.forEach(c => {
@@ -115,14 +119,11 @@ export function sourcesOfM(expr, params = new Map(), queryNames = new Set()) {
   // Başka bir sorguya başvuru: #"Ad" ya da düz ad, modeldeki paylaşılan sorgulardan biriyse
   const refs = new Set();
   const idRe = /#"((?:[^"]|"")*)"|\b([A-Za-z_][\w]*)\b/g; let m;
-  const noStrings = s.replace(/(#?)"(?:[^"]|"")*"/g, (m0, hash) => (hash ? m0 : '""'));
   while ((m = idRe.exec(noStrings))) {
     const name = (m[1] != null ? m[1].replace(/""/g, '"') : m[2]);
     if (queryNames.has(norm(name)) && !params.has(norm(name))) refs.add(name);
   }
   // Modelde olmayan sorgulara başvuru (yüklenmeyen ara sorgular): let içinde adım olarak tanımlanmamış #"Ad"
-  const defined = new Set(); let dm; const defRe = /#"((?:[^"]|"")*)"\s*=(?!=)|(?:^|[\s,])([A-Za-z_]\w*)\s*=(?!=)/g;
-  while ((dm = defRe.exec(noStrings))) defined.add(norm((dm[1] != null ? dm[1].replace(/""/g, '"') : dm[2])));
   const external = new Set(); const extRe = /#"((?:[^"]|"")*)"/g; let em;
   while ((em = extRe.exec(noStrings))) {
     if (/\[\s*$/.test(noStrings.slice(Math.max(0, em.index - 4), em.index))) continue;   // [#"Sütun"] alan erişimi, sorgu değil
@@ -137,8 +138,10 @@ export function sourcesOfM(expr, params = new Map(), queryNames = new Set()) {
     const cand = /\b([A-Z][A-Za-z0-9]+)\.(Database|Databases|Contents|Files|Feed|DataSource|Query|Tables|Data|Catalogs)\s*\(/g; let u;
     while ((u = cand.exec(masked))) unknown.push(u[1] + '.' + u[2]);
   }
+  // Aynı sorgunun önceki bir adımını okuyan bağlayıcı yeni kaynak değildir: Csv.Document(Dosya) gibi
+  const fresh = found.filter(f => !(f.location == null && f.param && defined.has(norm(f.param)) && !params.has(norm(f.param))));
   const uniq = [];
-  found.sort((a, b) => a.at - b.at).forEach(f => { const k = f.type + '|' + (f.location || f.param || '') + '|' + (f.database || ''); if (!uniq.some(x => x.k === k)) uniq.push({ ...f, k }); });
+  fresh.sort((a, b) => a.at - b.at).forEach(f => { const k = f.type + '|' + (f.location || f.param || '') + '|' + (f.database || ''); if (!uniq.some(x => x.k === k)) uniq.push({ ...f, k }); });
   return {
     sources: uniq.map(({ k, at, ...f }) => f),
     refs: [...refs],

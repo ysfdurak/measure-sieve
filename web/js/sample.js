@@ -11,7 +11,8 @@ const NAMES = {
     mTotal: 'Toplam Satış', mCost: 'Toplam Maliyet', mGross: 'Brüt Kâr', mMargin: 'Kâr Marjı %', mOrders: 'Sipariş Sayısı', mBasket: 'Ortalama Sepet',
     mLY: 'Geçen Yıl Satış', mGrowth: 'Yıllık Büyüme %', mColor: 'Marj Rengi', mTitle: 'Seçili Bölge Başlığı', mOldTarget: 'Eski Hedef', mGap: 'Hedefe Uzaklık',
     mTest: 'Test Measure', mDisc: 'Ortalama İskonto', mTurn: 'Stok Devir Hızı', mRevenue: 'Ciro', folder: 'Arşiv',
-    cmt: '// 2023 bütçe çalışmasından kaldı', titlePrefix: 'Bölge: ', all: 'Tümü',
+    cmt: '// 2023 bütçe çalışmasından kaldı', server: 'Sunucu', descTotal: 'Kampanya ve iadeler dahil, KDV hariç brüt satış tutarı.', descTurn: 'Satılan ürün miktarının ortalama stoka oranı; yüksek değer stokun hızlı döndüğünü gösterir.',
+    xProduct: 'C:\\Ortak\\Satış\\Ürün Listesi.xlsx', spStore: 'https://sirket.sharepoint.com/sites/Satis', xTarget: 'C:\\Ortak\\Bütçe\\Hedefler 2023.xlsx', db: 'SatisDW', titlePrefix: 'Bölge: ', all: 'Tümü',
     pOverview: 'Genel Bakış', pTip: 'Müşteri İpucu', pOld: 'Eski Deneme',
     vRevenue: 'Ciro', vOrders: 'Sipariş', vMonthly: 'Aylık Satış', vProducts: 'Ürün Tablosu', vBasket: 'Sepet', vDisc: 'İskonto', vRegion: 'Bölgeler'
   },
@@ -23,7 +24,8 @@ const NAMES = {
     mTotal: 'Total Sales', mCost: 'Total Cost', mGross: 'Gross Profit', mMargin: 'Margin %', mOrders: 'Order Count', mBasket: 'Average Basket',
     mLY: 'Sales LY', mGrowth: 'YoY Growth %', mColor: 'Margin Color', mTitle: 'Selected Region Title', mOldTarget: 'Old Target', mGap: 'Gap to Target',
     mTest: 'Test Measure', mDisc: 'Average Discount', mTurn: 'Stock Turnover', mRevenue: 'Revenue', folder: 'Archive',
-    cmt: '// left over from the 2023 budget work', titlePrefix: 'Region: ', all: 'All',
+    cmt: '// left over from the 2023 budget work', server: 'Server', descTotal: 'Gross sales amount excluding VAT, including campaigns and returns.', descTurn: 'Units sold divided by average stock; a high value means stock turns over quickly.',
+    xProduct: 'C:\\Shared\\Sales\\Product List.xlsx', spStore: 'https://company.sharepoint.com/sites/Sales', xTarget: 'C:\\Shared\\Budget\\Targets 2023.xlsx', db: 'SalesDW', titlePrefix: 'Region: ', all: 'All',
     pOverview: 'Overview', pTip: 'Customer Tooltip', pOld: 'Old Draft',
     vRevenue: 'Revenue', vOrders: 'Orders', vMonthly: 'Monthly Sales', vProducts: 'Product Table', vBasket: 'Basket', vDisc: 'Discount', vRegion: 'Regions'
   }
@@ -37,12 +39,16 @@ export function sampleEntries(lang) {
   const N = NAMES[lang] || NAMES.tr, S = N.Sales, ref = (t, c) => `${q(t)}[${c}]`;
   const col = (name, extra) => ({ name, ...(extra || {}) });
   const meas = (name, expression, extra) => ({ name, expression, ...(extra || {}) });
+  const mq = (name, ...lines) => [{ name, mode: 'import', source: { type: 'm', expression: ['let', ...lines.map(l => '    ' + l), 'in', '    ' + lines[lines.length - 1].split(' =')[0]] } }];
+  const mstr = v => '"' + v.replace(/"/g, '""') + '"';
+  const sql = (tbl) => mq(tbl, `Kaynak = Sql.Database(${N.server}, ${mstr(N.db)})`, `Veri = Kaynak{[Schema="dbo",Item=${mstr(tbl)}]}[Data]`);
+  const xls = (tbl, path, sheet) => mq(tbl, `Kaynak = Excel.Workbook(File.Contents(${mstr(path)}), null, true)`, `Sayfa = Kaynak{[Item=${mstr(sheet)},Kind="Sheet"]}[Data]`, `Başlıklar = Table.PromoteHeaders(Sayfa, [PromoteAllScalars=true])`);
   const schema = { name: N.file, model: {
     tables: [
       { name: S, columns: [col(N.Amount), col(N.Cost), col(N.OrderNo), col(N.DateCol), col(N.ProductKey), col(N.StoreKey), col(N.Discount), col(N.Note, { isHidden: true }),
         col(N.LineProfit, { type: 'calculated', expression: `${ref(S, N.Amount)} - ${ref(S, N.Cost)}` })],
         measures: [
-          meas(N.mTotal, `SUM(${ref(S, N.Amount)})`),
+          meas(N.mTotal, `SUM(${ref(S, N.Amount)})`, { description: N.descTotal }),
           meas(N.mCost, `SUM(${ref(S, N.Cost)})`),
           meas(N.mGross, `[${N.mTotal}] - [${N.mCost}]`),
           meas(N.mMargin, `DIVIDE([${N.mGross}], [${N.mTotal}])`),
@@ -56,21 +62,22 @@ export function sampleEntries(lang) {
           meas(N.mGap, `${N.cmt}\n[${N.mTotal}] - [${N.mOldTarget}]`, { displayFolder: N.folder }),
           meas(N.mTest, `COUNTROWS(${q(S)})`),
           meas(N.mDisc, `AVERAGE(${ref(S, N.Discount)})`),
-          meas(N.mTurn, `DIVIDE(SUM(${ref(N.Stock, N.Out)}), AVERAGE(${ref(N.Stock, N.OnHand)}))`),
+          meas(N.mTurn, `DIVIDE(SUM(${ref(N.Stock, N.Out)}), AVERAGE(${ref(N.Stock, N.OnHand)}))`, { description: N.descTurn }),
           meas(N.mRevenue, `sum( ${ref(S, N.Amount)} )`)
-        ] },
-      { name: N.Product, columns: [col(N.ProductKey), col(N.ProductName), col(N.Category), col(N.Color), col(N.Weight)] },
-      { name: N.Store, columns: [col(N.StoreKey), col(N.StoreName), col(N.Region)] },
-      { name: N.Date, columns: [col(N.DateCol), col(N.Year), col(N.MonthName, { sortByColumn: N.MonthNo }), col(N.MonthNo, { isHidden: true }), col(N.Week)] },
-      { name: N.Stock, columns: [col(N.ProductKey), col(N.Out), col(N.OnHand)] },
-      { name: N.OldTargets, isHidden: true, columns: [col(N.Year), col(N.Target)] }
+        ], partitions: sql(S) },
+      { name: N.Product, columns: [col(N.ProductKey), col(N.ProductName), col(N.Category), col(N.Color), col(N.Weight)], partitions: xls(N.Product, N.xProduct, N.Product) },
+      { name: N.Store, columns: [col(N.StoreKey), col(N.StoreName), col(N.Region)], partitions: mq(N.Store, `Kaynak = SharePoint.Files(${mstr(N.spStore)}, [ApiVersion = 15])`, `Dosya = Kaynak{[Name="Magazalar.csv"]}[Content]`, `Tablo = Csv.Document(Dosya, [Delimiter=";", Encoding=65001])`) },
+      { name: N.Date, columns: [col(N.DateCol), col(N.Year), col(N.MonthName, { sortByColumn: N.MonthNo }), col(N.MonthNo, { isHidden: true }), col(N.Week)], partitions: mq(N.Date, `Günler = List.Dates(#date(2023, 1, 1), 1096, #duration(1, 0, 0, 0))`, `Tablo = Table.FromList(Günler, Splitter.SplitByNothing(), {"Tarih"})`) },
+      { name: N.Stock, columns: [col(N.ProductKey), col(N.Out), col(N.OnHand)], partitions: sql(N.Stock) },
+      { name: N.OldTargets, isHidden: true, columns: [col(N.Year), col(N.Target)], partitions: xls(N.OldTargets, N.xTarget, '2023') }
     ],
     relationships: [
       { name: 'r1', fromTable: S, fromColumn: N.ProductKey, toTable: N.Product, toColumn: N.ProductKey },
       { name: 'r2', fromTable: S, fromColumn: N.StoreKey, toTable: N.Store, toColumn: N.StoreKey },
       { name: 'r3', fromTable: S, fromColumn: N.DateCol, toTable: N.Date, toColumn: N.DateCol },
-      { name: 'r4', fromTable: N.Stock, fromColumn: N.ProductKey, toTable: N.Product, toColumn: N.ProductKey }
-    ]
+      { name: 'r4', fromTable: N.Stock, fromColumn: N.ProductKey, toTable: N.Product, toColumn: N.ProductKey, crossFilteringBehavior: 'bothDirections' }
+    ],
+    expressions: [{ name: N.server, kind: 'm', expression: '"sql-satis-01" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]' }]
   } };
 
   const M = (p) => ({ Measure: { Expression: { SourceRef: { Source: 's' } }, Property: p }, Name: S + '.' + p });
