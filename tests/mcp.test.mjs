@@ -31,7 +31,7 @@ test('MCP: araçlar listelenir ve örnek PBIT taranır', async () => {
     const down = (await client.callTool({ name: 'soyagaci', arguments: { yollar: [file], ad: 'Ürün Listesi.xlsx' } })).content[0].text;
     assert.match(down, /değişirse 2 görsel/);
     const doc = (await client.callTool({ name: 'devir_belgesi', arguments: { yollar: [file], hazirlayan: 'Test' } })).content[0].text;
-    assert.match(doc, /^# Devir belgesi: Satış Raporu\.pbit/); assert.match(doc, /\| Hazırlayan \| Test \|/); assert.match(doc, /Çift yönlü filtre/);
+    assert.match(doc, /^# Devir belgesi: Satış Raporu\.pbit/); assert.match(doc, /\| Hazırlayan \| Test \|/); assert.match(doc, /Çift yönlü filtre/); assert.match(doc, /## Devralan kontrol listesi/); assert.match(doc, /- \[ \] Yenileme zamanı ve sıklığı: ______/); assert.match(doc, /Ağ geçidi/);
     const yaz = await client.callTool({ name: 'devir_belgesi', arguments: { yollar: [file], kaydet: path.join(dir, 'devir.md') } });
     assert.match(yaz.content[0].text, /İndirildi|devir\.md/);
     const dis = await client.callTool({ name: 'devir_belgesi', arguments: { yollar: [file], kaydet: path.join(os.tmpdir(), '..', 'x.md') } });

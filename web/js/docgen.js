@@ -44,8 +44,25 @@ export function handoverModel(t, R, L, EX, meta) {
     }) })),
     pages: pagesByReport(L).map(p => ({ title: p.page, state: p.state, report: p.report, visuals: p.visuals.map(v => ({ label: visualLabel(t, v), fields: v.nodeIds.map(id => nodeText(R.nodes[id])) })) })),
     roles: (R.roles || []).map(r => ({ name: r.name, expr: r.expr })),
+    checklist: checklist(t, R, L, EX, measures),
     diagram: relationshipSvg(relationshipLayout(R), { title: t('mdl.diagram'), cols: (c, m) => t('mdl.cols', { c, m }) })
   };
+}
+
+/** Dosyada olmayan, elle doldurulacak devir bilgileri. Hiçbiri tahmin edilmez; yalnız ne sorulacağı yazılır. */
+function checklist(t, R, L, EX, measures) {
+  const out = [];
+  L.sources.forEach(s => { const l = sourceLabel(t, s); out.push({ text: t('hd.c.access', { src: `${l.type}: ${l.loc}` }), blank: true }); });
+  out.push({ text: t('hd.c.refresh'), blank: true });
+  // Yerel dosya yolu ya da şirket içi sunucu varsa yenileme için ağ geçidi gerekir
+  if (L.sources.some(s => ['excel', 'csv', 'file', 'folder', 'sql', 'oracle', 'postgresql', 'mysql', 'odbc', 'oledb', 'ssas'].includes(s.type) && !/^https?:/i.test(s.location || '') && !/\.database\.windows\.net$/i.test(s.location || ''))) out.push({ text: t('hd.c.gateway'), blank: true });
+  out.push({ text: t('hd.c.workspace'), blank: true }, { text: t('hd.c.owner'), blank: true });
+  const roles = new Set((R.roles || []).map(r => r.name.split(' › ')[0]));
+  if (roles.size) out.push({ text: t('hd.c.roles', { n: roles.size }), blank: true });
+  const noExp = measures.filter(n => !EX.get(n.id)).length;
+  if (noExp) out.push({ text: t('hd.c.noExp', { n: noExp }) });
+  if (relationshipWarnings(R).length) out.push({ text: t('hd.c.watch') });
+  return out;
 }
 
 const metaRows = (t, m) => [[t('hd.file'), m.file], [t('hd.date'), m.date], m.by ? [t('hd.by'), m.by] : null, m.to ? [t('hd.to'), m.to] : null].filter(Boolean);
@@ -70,6 +87,7 @@ export function handoverMarkdown(t, R, L, EX, meta) {
     H.rels.forEach(r => o.push(`| ${md(r.text)} | ${md(r.card)} | ${md(r.filter)} | ${md(r.state)} |`)); o.push('');
   }
   o.push(`## 3. ${md(t('hd.watch'))}`, '', ...(H.watch.length ? H.watch.map(w => `- ${md(w)}`) : [md(t('hd.noWatch'))]), '');
+  o.push(`## ${md(t('hd.check'))}`, '', `_${md(t('hd.checkLead'))}_`, '', ...H.checklist.map(c => `- [ ] ${md(c.text)}${c.blank ? ': ______' : ''}`), '');
   o.push(`## 4. ${md(t('hd.measures'))}`, '');
   H.measureGroups.forEach(g => {
     o.push(`### ${md(g.table || '—')}`, '');
@@ -110,6 +128,7 @@ export function handoverHtml(t, R, L, EX, meta, lang = 'tr') {
     + table([t('kind.table'), t('tab.column'), t('tab.measure'), ''], H.tableRows.map(r => [e(r.name), `<span class="num">${r.cols}</span>`, `<span class="num">${r.meas}</span>`, e(r.note)]))
     + (H.rels.length ? `<h3>${e(t('hd.rels'))}</h3>` + table([t('hd.th.rel'), t('hd.th.card'), t('hd.th.filter'), t('hd.th.state')], H.rels.map(r => [e(r.text), e(r.card), e(r.filter), e(r.state)])) : '')));
   parts.push(sec('dikkat', `${num()}. ${t('hd.watch')}`, H.watch.length ? `<ul class="watch">${H.watch.map(w => `<li>${e(w)}</li>`).join('')}</ul>` : `<p>${e(t('hd.noWatch'))}</p>`));
+  parts.push(`<section id="kontrol" class="checklist"><h2>${e(t('hd.check'))}</h2><p class="muted">${e(t('hd.checkLead'))}</p><ul>${H.checklist.map(c => `<li><span class="box" aria-hidden="true"></span>${e(c.text)}${c.blank ? `<span class="line" aria-label="${e(t('hd.fill'))}"></span>` : ''}</li>`).join('')}</ul></section>`);
   parts.push(sec('measurelar', `${num()}. ${t('hd.measures')}`, H.measureGroups.map(g => `<h3>${e(g.table || '—')}</h3>` + g.items.map(m => `<div class="measure">
       <p><b>${e(m.name)}</b>${m.exp ? ` — ${e(m.exp)}${m.auto ? ` <span class="auto">${e(t('hd.auto'))}</span>` : ''}` : ` — <i>${e(t('hd.noExp'))}</i>`}</p>
       <p class="muted">${e(t('hd.usedIn'))}: ${m.pages.length ? e(m.pages.join(', ')) : `<i>${e(t('hd.notUsed'))}</i>`}</p>
@@ -130,7 +149,7 @@ table{border-collapse:collapse;width:100%;margin:8px 0 12px;font-size:14px}th,td
 pre{font:12.5px/1.45 Consolas,monospace;background:#f3f7f8;border:1px solid #e2eaee;padding:8px 10px;white-space:pre-wrap;word-break:break-word;margin:4px 0 10px}
 .measure{break-inside:avoid;margin-bottom:6px}.measure p{margin:4px 0}.muted{color:#526771;font-size:13.5px}
 .auto{font-size:11.5px;color:#526771;border:1px solid #cad6dc;border-radius:3px;padding:0 5px;margin-left:4px}
-.watch li{margin-bottom:4px}.toc{background:#edf2f4;padding:10px 16px;margin:12px 0}.toc ol{margin:4px 0 0}
+.watch li{margin-bottom:4px}.checklist ul{list-style:none;padding:0}.checklist li{display:flex;align-items:flex-end;gap:8px;margin:10px 0;flex-wrap:wrap}.checklist .box{width:13px;height:13px;border:1.5px solid #14262f;border-radius:2px;flex:none;margin-bottom:3px}.checklist .line{flex:1 1 180px;border-bottom:1px solid #526771;min-height:18px}.toc{background:#edf2f4;padding:10px 16px;margin:12px 0}.toc ol{margin:4px 0 0}
 figure{margin:8px 0 16px;overflow-x:auto}figcaption{font-size:13px;color:#526771}footer{margin-top:36px;font-size:12.5px;color:#526771}
 ${DIAGRAM_CSS}
 @media print{body{padding:0;max-width:none}h2{break-after:avoid}.toc{display:none}a{color:inherit;text-decoration:none}}

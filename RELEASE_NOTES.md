@@ -7,7 +7,7 @@
 - Okuyucular artık Power Query bölümlerini, paylaşılan sorguları ve parametreleri, ilişki kardinalitesi ve filtre yönünü, nesne açıklamalarını da okuyor (PBIX, TMSL, TMDL). Aynı rapor 5 biçimde bayt bayt aynı M kodunu veriyor.
 - **İlişki diyagramı** ve uyarılar: çift yönlü, çoka çok, pasif, bire bir ilişki; ilişkisiz tablo.
 - **Measure açıklamaları:** modeldeki açıklama önce; yoksa formülden kural tabanlı TR/EN cümle. 20 ölçülük doğruluk seti 20/20; gerçek 733 measure'ın %77'si açıklanıyor, 46 örneklemde yanlış açıklama yok.
-- **Devir belgesi:** Markdown ve yazdırılabilir HTML; betiksiz, sıkı CSP.
+- **Devir belgesi:** Markdown ve yazdırılabilir HTML; betiksiz, sıkı CSP. Dosyada olmayan bilgiler (kaynak erişimi, yenileme zamanı, ağ geçidi, çalışma alanı, sahip, rol atamaları) için elle doldurulacak **devralan kontrol listesi**; hiçbiri tahmin edilmez.
 - MCP: `soyagaci` ve `devir_belgesi` araçları.
 - Temizle ↔ Belgele iki yönlü geçiş; `#belgele` bağlantısıyla doğrudan açılış.
 - Güvenlik: tüm adlar kaçışlanıyor; kötü niyetli adlarla XSS denemesi sayfada ve indirilen belgede sonuçsuz. Portföy güvenlik taraması temiz.

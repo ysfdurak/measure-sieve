@@ -237,7 +237,7 @@ Web ve MCP aynı modülleri kullanır; bu yüzden MCP'nin `devir_belgesi` aracı
 
 ### Bilinen sınırlar
 
-- Yenileme zamanı, ağ geçidi, çalışma alanı ve rapor sahibi dosyada yoktur; belge bunları uydurmaz. (Öneri: devir belgesine elle doldurulacak bir "devralan kontrol listesi" eklemek; kullanıcı onayı bekliyor.)
+- Yenileme zamanı, ağ geçidi, çalışma alanı ve rapor sahibi dosyada yoktur; belge bunları uydurmaz. Bunun yerine devir belgesinde elle doldurulacak bir **devralan kontrol listesi** var (kullanıcı onayıyla eklendi). Ağ geçidi maddesi yalnız yerel dosya ya da şirket içi sunucu kaynağı varsa çıkar.
 - Yüklenmeyen ara sorgular (`#"Fact A"` gibi) adıyla bildirilir ama kaynağı bilinemez.
 - 40'tan fazla ilişkili tabloda diyagram yerine liste gösterilir.
 - Açıklama kalıpları yaygın DAX'ı kapsar; `VAR/RETURN`, `RANKX`, `TREATAS` gibi formüller bilerek açıklanmaz.
@@ -281,4 +281,5 @@ Web ve MCP aynı modülleri kullanır; bu yüzden MCP'nin `devir_belgesi` aracı
 
 ### Değişiklik günlüğü
 
+- **26 Kasım 2026 · 1.2.0 (ek):** Devir belgesine devralan kontrol listesi.
 - **26 Kasım 2026 · 1.2.0:** Belgele modu; okuyucuya M, ilişki ayrıntısı ve açıklamalar; `soyagaci` ve `devir_belgesi` MCP araçları; kullanıcı gözüyle inceleme düzeltmeleri.
