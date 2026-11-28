@@ -5,7 +5,7 @@
 
 import { relationshipWarnings } from './lineage.js';
 import { relationshipLayout, relationshipSvg, DIAGRAM_CSS } from './diagram.js';
-import { sourceLabel, visualLabel, queryWhy, warningText, relText, pagesByReport } from './docview.js';
+import { docHead, sourceLabel, visualLabel, queryWhy, warningText, relText, pagesByReport } from './docview.js';
 import { listNames } from './i18n.js';
 
 const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -29,7 +29,7 @@ export function handoverModel(t, R, L, EX, meta) {
   const byTable = new Map(); measures.forEach(n => { const k = n.table || ''; if (!byTable.has(k)) byTable.set(k, []); byTable.get(k).push(n); });
   return {
     meta, tables, measures, watch,
-    summary: R.hasReport ? t('doc.head', { t: tables.length, m: measures.length, s: L.sources.length, v: L.visuals.filter(v => v.type !== 'pageFilter' && v.type !== 'reportFilter').length })
+    summary: R.hasReport ? docHead(t, R, L, tables.length, measures.length)
       : t('doc.headNoReport', { t: tables.length, m: measures.length, s: L.sources.length }),
     sources: L.sources.map(s => ({ ...sourceLabel(t, s), tables: tablesFed(s) })),
     params: L.params,

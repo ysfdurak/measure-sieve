@@ -344,10 +344,11 @@ export function modelFromTmdl(files) {
 // Kullanım türleri (kind): field = görsel alanı, filter, format = koşullu biçimlendirme,
 // title = dinamik başlık, bookmark = yer imi, viscalc = görsel hesaplama
 // Sayfa durumu (state): normal, hidden, tooltip, drill
-function visualInfo(type, objs) {
+function visualInfo(type, objs, id) {
   let title = null;
   try { const v = objs && objs.title && objs.title[0].properties.text.expr.Literal.Value; if (v) title = v.replace(/^'|'$/g, ''); } catch (e) { /* başlık yok */ }
-  return { type: type || 'visual', title };
+  // id: görselin rapordaki adı; aynı sayfada aynı tür ve başlıktaki iki görsel (ör. başlıksız iki kart) ayrı sayılsın
+  return id ? { type: type || 'visual', title, id: String(id) } : { type: type || 'visual', title };
 }
 function pageStateOf(cfg, sec) {
   const b = (cfg && cfg.pageBinding) || (sec && sec.pageBinding), type = String((b && b.type) || (cfg && cfg.type) || '').toLowerCase();
@@ -419,8 +420,8 @@ export function readLegacyReport(json, name) {
     const cfg = tryParse(sec.config) || {}, page = sec.displayName || sec.name, state = pageStateOf(cfg, sec), pc = { page, state, visual: null, kind: null };
     walk(sec.filters, { ...pc, kind: 'filter', visual: { type: 'pageFilter' } }, rep, {}); walk(cfg, pc, rep, {});
     (sec.visualContainers || []).forEach(v => {
-      rep.visuals++;
-      const vc = tryParse(v.config) || {}, sv = vc.singleVisual || (vc.singleVisualGroup ? { visualType: 'group' } : {}), visual = visualInfo(sv.visualType, sv.vcObjects), c = { page, state, visual, kind: null };
+      const vc = tryParse(v.config) || {}, sv = vc.singleVisual || (vc.singleVisualGroup ? { visualType: 'group' } : {}), visual = visualInfo(sv.visualType, sv.vcObjects, vc.name), c = { page, state, visual, kind: null };
+      if (!vc.singleVisualGroup) rep.visuals++; // grup bir görsel değil, içindekileri toplayan çerçevedir
       walk(vc, c, rep, {}); walk(v.filters, { ...c, kind: 'filter' }, rep, {}); walk(v.query, c, rep, {}); walk(v.dataTransforms, c, rep, {});
     });
   });
@@ -438,9 +439,9 @@ export async function readPbir(entries, name) {
     walk(j.filterConfig, { ...pc, kind: 'filter', visual: { type: 'pageFilter' } }, rep, {}); walk(j.objects, pc, rep, {}); walk(j.visualInteractions, pc, rep, {});
   }
   for (const e of entries.filter(e => /\/visuals\/[^/]+\/visual\.json$/.test('/' + lp(e)))) {
-    const j = await get(e); if (!j) continue; rep.visuals++;
+    const j = await get(e); if (!j) continue; if (!j.visualGroup) rep.visuals++;
     const pdir = e.path.replace(/visuals\/[^/]+\/visual\.json$/i, '').toLowerCase(), p = pages[pdir] || { name: '?', state: 'normal' }, v = j.visual || {};
-    walk(j, { page: p.name, state: p.state, visual: visualInfo(v.visualType || (j.visualGroup ? 'group' : ''), v.visualContainerObjects), kind: null }, rep, {});
+    walk(j, { page: p.name, state: p.state, visual: visualInfo(v.visualType || (j.visualGroup ? 'group' : ''), v.visualContainerObjects, j.name), kind: null }, rep, {});
   }
   for (const e of entries.filter(e => /\/bookmarks\/[^/]+\.bookmark\.json$/.test('/' + lp(e)))) {
     const j = await get(e); if (!j) continue;

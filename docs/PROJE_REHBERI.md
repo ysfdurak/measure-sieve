@@ -214,7 +214,7 @@ Web ve MCP aynı modülleri kullanır; bu yüzden MCP'nin `devir_belgesi` aracı
 
 | Adım | Beklenen | Gözlenen | Durum |
 |---|---|---|---|
-| `npm test` | Tüm testler geçer | 34/34 | ✓ |
+| `npm test` | Tüm testler geçer | 35/35 | ✓ |
 | Aynı rapor 5 biçimde M ve parametre karşılaştırması | Aynı özet | 5/5 aynı | ✓ |
 | 25 gerçek PBIX'te tablo sorgusu kaynağı | Çoğu bulunur, kalan açıklanır | 258 sorgunun 253'ü; kalan 5 başka sorgu/fonksiyondan üretiliyor | ✓ |
 | Açıklama kapsaması ve doğruluğu (gerçek 733 measure) | Yanlış açıklama yok | %77 açıklamalı; 46 örneklemde yanlış yok | ✓ |
@@ -223,8 +223,15 @@ Web ve MCP aynı modülleri kullanır; bu yüzden MCP'nin `devir_belgesi` aracı
 | Telefon 390 px, koyu tema, İngilizce | Taşma yok, hata yok | Taşma yok, konsol hatası yok | ✓ |
 | Tek dosyalık sürüm (`dist/measure-sieve.html`) | Belgele açılır | Açıldı, hata yok | ✓ |
 | Portföy güvenlik taraması | Temiz | Temiz | ✓ |
-| Windows'ta Power BI Desktop ile kaydedilmiş PBIX/PBIP | Kaynaklar ve diyagram doğru | **[doğrulanacak]** | — |
+| Windows'ta Power BI Desktop ile kaydedilmiş PBIX/PBIP (Store Sales örneği, 28 Kasım 2026) | Kaynaklar ve diyagram doğru, iki biçim aynı sonuç | 7 tablo, 32 measure, 1 kaynak, 3 sayfa; PBIX ve PBIP klasörü aynı. 3 bulgu → 1.2.1'de düzeltildi | ✓ |
+| PBIP dosyaları klasörsüz seçilince (1.2.1) | Açık uyarı, model yine okunur | Uyarı çıktı, model okundu | ✓ |
 | Canlı sitede `#belgele` ve güvenlik başlıkları | Açılır, başlıklar gelir | **[yayından sonra]** | — |
+
+### Windows testinden ders (1.2.1)
+
+- **İki ekran aynı kelimeyi farklı sayıyordu.** Temizle "görsel"i rapordaki kapsayıcı olarak (`rep.visuals++`, her `visual.json` için) sayıyor, Belgele soyağacındaki görselleri (modelden alan kullananlar). İkisi de doğru ama kullanıcı yan yana görünce "hangisi?" der. Çözüm sayıyı değiştirmek değil, farkı adlandırmak: `docHead()` toplamdan farkı "metin kutusu, resim ya da şekil" diye yazar.
+- **Anahtar seçimi gizli bir hataydı.** `visualKey` görseli "rapor + sayfa + tür + başlık" ile tanıyordu; başlıksız iki kart aynı anahtarı alıp birleşiyordu. Test verisinde her görselin başlığı olduğu için hiçbir test yakalamadı. Doğrusu, rapordaki benzersiz adı (`visual.json` › `name`, eski biçimde `config.name`) kullanmak.
+- **Tarayıcı dosya seçicisi klasör yolu vermez.** `<input type=file multiple>` yalnız dosya adını verir (`webkitRelativePath` boş); PBIP'in anlamı klasör yapısında olduğu için rapor eşlenemez. Böyle bir girdiyi sessizce yarım okumak yerine söylemek gerekir.
 
 ### Kullanıcı gözüyle inceleme
 
@@ -280,6 +287,8 @@ Web ve MCP aynı modülleri kullanır; bu yüzden MCP'nin `devir_belgesi` aracı
 6. Devir belgesini indir, yazdırma önizlemesini aç (1 dk).
 
 ### Değişiklik günlüğü
+
+- **28 Kasım 2026 · 1.2.1:** Windows testi bulguları: görsel sayısı iki ekranda tutarlı (metin kutusu farkı söyleniyor, gruplar sayılmıyor), aynı başlıklı görseller ayrı, yerel SQL sunucusu ("."), klasörsüz seçilen PBIP için uyarı.
 
 - **26 Kasım 2026 · 1.2.0 (ek):** Devir belgesine devralan kontrol listesi.
 - **26 Kasım 2026 · 1.2.0:** Belgele modu; okuyucuya M, ilişki ayrıntısı ve açıklamalar; `soyagaci` ve `devir_belgesi` MCP araçları; kullanıcı gözüyle inceleme düzeltmeleri.

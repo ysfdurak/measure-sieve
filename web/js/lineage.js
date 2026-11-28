@@ -163,7 +163,7 @@ export function parameterValue(expr) {
 /* ---------------------------------------------------------------- Soyağacı grafiği */
 
 const LIVE_KINDS = new Set(['field', 'filter', 'format', 'title', 'viscalc']);
-export const visualKey = u => [u.report || '', u.page || '', u.visual && typeof u.visual === 'object' ? (u.visual.type || '') + '\u0001' + (u.visual.title || '') : String(u.visual || '')].join('\u0002');
+export const visualKey = u => [u.report || '', u.page || '', u.visual && typeof u.visual === 'object' ? (u.visual.id ? '#' + u.visual.id : (u.visual.type || '') + '\u0001' + (u.visual.title || '')) : String(u.visual || '')].join('\u0002');
 
 /**
  * analyze() sonucundan soyağacı grafiği kurar.
@@ -216,7 +216,7 @@ export function buildLineage(res) {
     if (!visualIdx.has(k)) {
       const v = u.visual && typeof u.visual === 'object' ? u.visual : { type: 'visual', title: null };
       visualIdx.set(k, visuals.length);
-      visuals.push({ id: visuals.length, report: u.report, page: u.page, state: u.state, type: v.type, title: v.title, nodeIds: [], kinds: {} });
+      visuals.push({ id: visuals.length, report: u.report, page: u.page, state: u.state, type: v.type, title: v.title, name: v.id || null, nodeIds: [], kinds: {} });
     }
     const vis = visuals[visualIdx.get(k)];
     if (!vis.nodeIds.includes(n.id)) vis.nodeIds.push(n.id);

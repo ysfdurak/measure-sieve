@@ -95,3 +95,22 @@ test('ilişki uyarıları: çift yön, pasif, ilişkisiz tablo', async () => {
   const w = relationshipWarnings(res).map(x => x.code + (x.table != null ? ':' + res.tables[x.table].name : '')).sort();
   assert.deepEqual(w, ['bothDirections', 'inactive', 'isolated:Kesici']);
 });
+
+test('Windows bulguları: başlıksız iki kart ayrı görsel, grup ve metin kutusu sayımı, yerel SQL sunucusu etiketi', async () => {
+  const { docHead, sourceLabel } = await import('../web/js/docview.js');
+  const { makeT } = await import('../web/js/i18n.js');
+  const t = makeT('tr');
+  const bim = { model: { tables: [{ name: 'Satış', columns: [{ name: 'Tutar' }], measures: [{ name: 'Ciro', expression: 'SUM(Satış[Tutar])' }, { name: 'Adet', expression: 'COUNTROWS(Satış)' }],
+    partitions: [{ name: 'Satış', source: { type: 'm', expression: 'let K = Sql.Database(".", "DW") in K' } }] }] } };
+  const kart = (n, m) => ({ config: JSON.stringify({ name: n, singleVisual: { visualType: 'card', prototypeQuery: { From: [{ Name: 's', Entity: 'Satış' }], Select: [{ Measure: { Expression: { SourceRef: { Source: 's' } }, Property: m }, Name: 'Satış.' + m }] } } }) });
+  const layout = { sections: [{ name: 's', displayName: 'Özet', visualContainers: [kart('k1', 'Ciro'), kart('k2', 'Adet'),
+    { config: JSON.stringify({ name: 'g1', singleVisualGroup: { displayName: 'Grup' } }) },
+    { config: JSON.stringify({ name: 'm1', singleVisual: { visualType: 'textbox' } }) }] }] };
+  const g = await extractGroup({ label: 't', kind: 'folder', entries: [entry('M.SemanticModel/model.bim', bim), entry('M.Report/report.json', layout), entry('M.Report/definition.pbir', { datasetReference: { byPath: { path: '../M.SemanticModel' } } })] });
+  const res = analyze(buildProjects([g]).projects[0]), L = buildLineage(res);
+  assert.equal(L.visuals.filter(v => v.type === 'card').length, 2, 'aynı sayfada başlıksız iki kart birleşmez');
+  assert.equal(res.reports[0].visuals, 3, 'grup görsel sayılmaz: iki kart + metin kutusu');
+  assert.match(docHead(t, res, L, 1, 2), /raporda 2 görsel \(\+1 metin kutusu/, 'Belgele, Temizle ile aynı toplamı açıklar');
+  assert.match(sourceLabel(t, L.sources[0]).loc, /^\. \(bu bilgisayardaki yerel sunucu\)$/);
+  assert.equal(sourceLabel(t, { type: 'sql', location: 'srv01' }).loc, 'srv01', 'gerçek sunucu adı olduğu gibi');
+});
