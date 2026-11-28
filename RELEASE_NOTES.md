@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## 1.2.1 · Kasım 2026 (Windows testi düzeltmeleri)
+
+Gerçek bir Power BI Desktop dosyasıyla (Store Sales örneği, PBIX ve PBIP) yapılan Windows testinde bulunanlar:
+
+- **Görsel sayısı iki ekranda farklıydı** (Temizle 14, Belgele 13). Temizle rapordaki bütün görselleri sayar, Belgele modelden veri kullananları. Belgele artık farkı söylüyor: "13 görsel (+1 metin kutusu, resim ya da şekil)". Gruplar görsel sayılmıyor.
+- **Aynı sayfada aynı tür ve başlıktaki görseller birleşiyordu** (ör. başlıksız iki kart tek görsel sayılırdı). Görseller artık rapordaki adlarıyla ayrılıyor.
+- **SQL Server kaynağı "." diye görünüyordu.** ".", "(local)", "localhost" artık "bu bilgisayardaki yerel sunucu" diye açıklanıyor.
+- **PBIP dosyaları "Dosya seç" ile tek tek seçilince** rapor sessizce kayboluyordu ("Rapor bulunamadı"). Artık ne olduğunu ve ne yapılacağını (klasör seç ya da ZIP'le) söyleyen bir uyarı çıkıyor; yüklenen ad da ".platform" yerine `.pbip` dosyasının adı.
+
 ## 1.2.0 · Kasım 2026 (Belgele modu)
 
 - Yeni **Belgele** modu: Temizle'nin yanında. Aynı dosya, ikinci soru: "bu model ne yapıyor?"

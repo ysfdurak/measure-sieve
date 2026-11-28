@@ -14,8 +14,18 @@ export const DOC_TABS = ['lineage', 'sources', 'model', 'measures', 'pages'];
 
 /* ---------------------------------------------------------------- Ortak etiketler */
 
+const LOCAL_HOSTS = /^(\.|\(local\)|localhost|127\.0\.0\.1)(\\[^\\]+)?$/i;
+/** Belgele başlığı. Temizle'deki sayı rapordaki bütün görsel kapsayıcılarıdır; burada modelden veri kullananlar sayılır,
+ *  aradaki fark (metin kutusu, resim, şekil) ayrıca söylenir ki iki ekran çelişkili görünmesin. */
+export function docHead(t, R, L, tables, measures) {
+  const v = L.visuals.filter(x => x.type !== 'pageFilter' && x.type !== 'reportFilter').length;
+  const total = (R.reports || []).reduce((a, r) => a + (r.visuals || 0), 0), x = total - v;
+  return t(x > 0 ? 'doc.headText' : 'doc.head', { t: tables, m: measures, s: L.sources.length, v, x });
+}
 export function sourceLabel(t, s) {
-  const loc = s.location != null && s.location !== '' ? s.location : (s.param ? '{' + s.param + '}' : t('src.noLoc'));
+  let loc = s.location != null && s.location !== '' ? s.location : (s.param ? '{' + s.param + '}' : t('src.noLoc'));
+  // "." , "(local)", "localhost" SQL Server'da bu bilgisayardaki sunucu demektir; tek başına "." okunmaz
+  if (['sql', 'ssas', 'oledb', 'odbc'].includes(s.type) && LOCAL_HOSTS.test(String(s.location || '').trim())) loc = t('src.local', { l: s.location.trim() });
   return { type: t('src.type.' + s.type), loc, extra: [s.database ? t('src.db', { d: s.database }) : '', s.param && s.location != null ? t('src.param', { p: s.param }) : ''].filter(Boolean).join(' · ') };
 }
 export function visualLabel(t, v) {
@@ -42,7 +52,7 @@ export function queryWhy(t, q) {
 export function docHeadHtml(t, R, L) {
   if (!R.hasModel) return `<div class="notice err"><b>${esc(t('doc.noModel'))}</b></div>`;
   const tables = R.tables.filter(x => !x.system).length, measures = R.nodes.filter(n => n.kind === 'measure' && n.origin === 'model').length;
-  const head = R.hasReport ? t('doc.head', { t: tables, m: measures, s: L.sources.length, v: L.visuals.filter(v => v.type !== 'pageFilter' && v.type !== 'reportFilter').length })
+  const head = R.hasReport ? docHead(t, R, L, tables, measures)
     : t('doc.headNoReport', { t: tables, m: measures, s: L.sources.length });
   return esc(head);
 }

@@ -91,7 +91,10 @@ async function ingest(items) {
     if (loose.length) {
       if (loose.length === 1 && /\.pbip$/i.test(loose[0].file.name)) notes.push({ code: 'pbipPointer', err: true, args: { name: loose[0].file.name } });
       else {
-        const first = loose[0].path || loose[0].file.name, top = first.includes('/') ? first.split('/')[0] : loose[0].file.name;
+        // "Dosya seç" ile PBIP parçaları tek tek seçildiyse klasör yolları yoktur: sayfa/görsel dosyaları eşlenemez, rapor kaybolur
+        const flat = loose.length > 1 && !loose.some(i => (i.path || '').includes('/')) && loose.some(i => /^(visual|page|pages|report|definition)\.json$|\.(tmdl|pbir|pbism|pbip)$|^\.platform$/i.test(i.file.name));
+        if (flat) notes.push({ code: 'pbipFlat', err: true });
+        const first = loose[0].path || loose[0].file.name, top = first.includes('/') ? first.split('/')[0] : (loose.length > 1 ? (loose.find(i => /\.pbip$/i.test(i.file.name)) || loose[0]).file.name : loose[0].file.name);
         // Okunacak metin dosyalarına boyut sınırı (veri önbelleği gibi büyük dosyalar yalnız kopyaya aynen aktarılır)
         groups.push({ label: top, kind: 'folder', entries: loose.map(i => ({ path: i.path || i.file.name, read: async () => {
           if (i.file.size > (/\.(json|tmdl|bim|pbir|pbism|pbip)$/i.test(i.file.name) ? LIMITS.entryBytes : LIMITS.fileBytes)) throw Object.assign(new Error('tooLarge'), { code: 'tooLarge' });
