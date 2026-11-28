@@ -42,6 +42,8 @@ Claude Desktop'ta **Ayarlar › Geliştirici › Yapılandırmayı düzenle** il
 |---|---|---|
 | `modeli_tara` | Özet ve adaylar: kullanılmayan measure, sütun, tablolar; aynı formüller; raporda olup modelde olmayan alanlar | Hayır |
 | `oge_detayi` | Bir öğenin formülü, kullanıldığı yerler, onu kullananlar ve onun kullandıkları | Hayır |
+| `soyagaci` | Veri soyağacı: bir measure, sütun, tablo, kaynak ya da görsel için kaynak → sorgu → tablo → measure → görsel zinciri | Hayır |
+| `devir_belgesi` | Markdown devir belgesi (web'deki "Markdown indir" ile aynı); `kaydet` verilirse izinli klasöre yeni `.md` yazar | Yalnızca yeni `.md` |
 | `silme_plani` | Silme sırası, etkiler, Tabular Editor betiği ve Power Query adımı | Hayır |
 | `temiz_kopya_olustur` | Temizlenmiş kopyayı yazar (`X.temiz.pbit` ya da `klasör-temiz/`, veri önbelleği dahil) ve yapısal doğrulamayı çalıştırır | Yalnızca yeni kopya |
 | `desktop_listele` | Açık Power BI Desktop pencerelerinin motor portları | Hayır |
@@ -69,6 +71,9 @@ Ayrıntılar:
 
 - "C:\Raporlar\Satış klasöründeki PBIP projesinde kullanılmayan measure'ları listele."
 - "Brüt Kâr measure'ını silersem ne bozulur?"
+- "Genel Bakış sayfasındaki Ciro kartının sayısı hangi dosyadan geliyor?"
+- "Ürün Listesi.xlsx değişirse hangi görseller etkilenir?"
+- "Bu modelin devir belgesini çıkar; hazırlayan Yusuf."
 - "Satış.pbit için kullanılmayan measure ve hesaplanmış tablolardan temizlenmiş bir kopya oluştur."
 - "Açık Power BI Desktop'taki raporun değerlerini ölç; temizlikten sonra karşılaştıracağız."
 
@@ -82,4 +87,4 @@ Ayrıntılar:
 
 ## English (short)
 
-A local stdio MCP server built on the same core as the web app. Install with `cd mcp && npm install`, then add `node <repo>/mcp/server.mjs <allowed folder> [...]` to `claude_desktop_config.json`. Tools: `modeli_tara` (scan), `oge_detayi` (item detail), `silme_plani` (removal plan and Tabular Editor script), `temiz_kopya_olustur` (writes a new cleaned copy and verifies it; never overwrites), `desktop_listele`, `degerleri_olc` and `degerleri_karsilastir` (numeric before/after check against an open Power BI Desktop on Windows, EVALUATE queries only). Pass `dil: "en"` for English output.
+A local stdio MCP server built on the same core as the web app. Install with `cd mcp && npm install`, then add `node <repo>/mcp/server.mjs <allowed folder> [...]` to `claude_desktop_config.json`. Tools: `modeli_tara` (scan), `oge_detayi` (item detail), `soyagaci` (data lineage in both directions), `devir_belgesi` (handover document in Markdown), `silme_plani` (removal plan and Tabular Editor script), `temiz_kopya_olustur` (writes a new cleaned copy and verifies it; never overwrites), `desktop_listele`, `degerleri_olc` and `degerleri_karsilastir` (numeric before/after check against an open Power BI Desktop on Windows, EVALUATE queries only). Pass `dil: "en"` for English output.

@@ -4,6 +4,10 @@ import { extractGroup, buildProjects, analyze, removalPlan, teScript, sniff, STA
 import { makeT, reasonText, noteText, usageText, listNames, LANGS } from './i18n.js';
 import { sampleEntries, sampleName } from './sample.js';
 import { cleanupPlan, buildCleanFiles, verifyCopy, packCopy } from './clean.js';
+import { buildLineage } from './lineage.js';
+import { explainAll } from './explain.js';
+import { docHeadHtml, docTabsHtml, docBodyHtml, exportHtml, defaultStart, DOC_TABS } from './docview.js';
+import { handoverMarkdown, handoverHtml } from './docgen.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,7 +32,15 @@ function applyStatic() {
 }
 
 /* ---------- Durum ---------- */
-const state = { extractions: [], projects: [], pi: 0, res: null, tab: 'measure', filter: 'all', q: '', open: new Set(), selected: new Set(), sample: true, loadNotes: [], busy: false, limit: PAGE };
+const state = { extractions: [], projects: [], pi: 0, res: null, tab: 'measure', filter: 'all', q: '', open: new Set(), selected: new Set(), sample: true, loadNotes: [], busy: false, limit: PAGE,
+  mode: /^#(belgele|document)$/i.test(location.hash) ? 'doc' : 'clean', doc: { tab: 'lineage', start: null, q: '', by: '', to: '', msg: '' }, lin: null, ex: null };
+/** Soyağacı ve açıklamalar yalnız Belgele açılınca hesaplanır (Temizle'yi yavaşlatmasın). */
+function docData() {
+  const R = state.res; if (!R) return null;
+  if (!state.lin) { state.lin = buildLineage(R); state.doc.start = defaultStart(R, state.lin); }
+  if (!state.ex) state.ex = explainAll(R, lang);
+  return { R, L: state.lin, EX: state.ex };
+}
 const key = (kind, id) => (kind === 'table' ? 't:' : 'n:') + id;
 
 function setProjects(extractions) {
@@ -40,7 +52,7 @@ function setProjects(extractions) {
 function selectProject(i) {
   state.pi = i;
   const p = state.projects[i];
-  state.res = p ? analyze(p) : null; resetClean();
+  state.res = p ? analyze(p) : null; resetClean(); state.lin = null; state.ex = null; state.doc.q = ''; state.doc.msg = '';
   state.selected = new Set(); state.filter = 'all'; state.q = ''; state.limit = PAGE; $('#search').value = '';
   if (state.res) {
     state.res.items.filter(n => n.kind === 'measure' && CANDIDATE(n.status) && n.origin !== 'reportOnly').forEach(n => state.selected.add(key('node', n.id)));
@@ -198,6 +210,7 @@ function detailHtml(x, R) {
     ${x.duplicates.length ? `<div><h3>${esc(t('d.dups'))}</h3>${jumpList(x.duplicates, R)}</div>` : ''}
     ${x.usedBy.size ? `<div><h3>${esc(t('d.usedBy'))}</h3>${jumpList(x.usedBy, R)}</div>` : ''}
     ${x.uses.size ? `<div><h3>${esc(t('d.uses'))}</h3>${jumpList(x.uses, R)}</div>` : ''}
+    ${R.hasModel && x.origin !== 'reportOnly' ? `<div><button class="btn" type="button" data-lin="node:${esc(x.id)}">${esc(t('d.lineage'))}</button></div>` : ''}
   </div>`;
 }
 function renderList() {
@@ -308,7 +321,62 @@ async function buildClean() {
   } catch (e) { state.clean = { err: String(e && e.message || e) }; }
   renderPanel();
 }
-function render() { renderTop(); renderList(); renderPanel(); }
+function renderMode() {
+  document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === state.mode)));
+  const doc = state.mode === 'doc';
+  $('#docmode').hidden = !doc; document.querySelector('.verdict').hidden = doc; $('#work').hidden = doc;
+}
+function renderDoc() {
+  if (state.mode !== 'doc') return;
+  const d = docData();
+  if (!d) { $('#docHead').textContent = ''; $('#docBody').innerHTML = ''; $('#dtabs').innerHTML = ''; $('#exportBox').innerHTML = ''; $('#docNotices').innerHTML = notesHtml(state.loadNotes); return; }
+  $('#docHead').innerHTML = docHeadHtml(t, d.R, d.L);
+  $('#docNotices').innerHTML = notesHtml(state.loadNotes);
+  $('#exportBox').innerHTML = d.R.hasModel ? exportHtml(t, state.doc) : '';
+  $('#dtabs').innerHTML = d.R.hasModel ? docTabsHtml(t, state.doc) : '';
+  $('#docBody').innerHTML = docBodyHtml(t, d.R, d.L, d.EX, state.doc);
+}
+function renderDocBody() { const d = docData(); if (d) $('#docBody').innerHTML = docBodyHtml(t, d.R, d.L, d.EX, state.doc); }
+function render() { renderMode(); renderTop(); renderList(); renderPanel(); renderDoc(); }
+function setMode(m, opts = {}) {
+  state.mode = m; renderMode(); if (m === 'doc') renderDoc(); else { renderTop(); renderList(); renderPanel(); }
+  try { history.replaceState(null, '', m === 'doc' ? '#' + (lang === 'tr' ? 'belgele' : 'document') : location.pathname + location.search); } catch (e) { /* çerçeve izin vermeyebilir */ }
+  if (opts.focus !== false) {
+    const el = document.querySelector(`[data-mode="${m}"]`); if (el) el.focus({ preventScroll: true });
+    // Telefonda mod içeriği ilk ekranın altında kalıyordu: seçim çubuğunu üste getir
+    const bar = $('#modes'); if (bar && bar.getBoundingClientRect().top > innerHeight * 0.35) bar.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+}
+/** Belgele: bir başlangıçtan soyağacını aç */
+function openLineage(kind, id) {
+  docData(); state.doc.tab = 'lineage'; state.doc.start = { kind, id };
+  if (state.mode !== 'doc') setMode('doc', { focus: false }); else renderDoc();
+  const g = $('#docBody'); if (g) g.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+/* ---------- Devir belgesi ---------- */
+function exportDoc(kind) {
+  const d = docData(); if (!d || !d.R.hasModel) return;
+  const meta = { by: state.doc.by, to: state.doc.to, date: new Date().toISOString().slice(0, 10), file: state.sample ? sampleName(lang) : state.extractions.map(x => x.label).join(', ') };
+  const ascii = x => x.replace(/[çÇğĞıİöÖşŞüÜ]/g, ch => ({ ç: 'c', Ç: 'C', ğ: 'g', Ğ: 'G', ı: 'i', İ: 'I', ö: 'o', Ö: 'O', ş: 's', Ş: 'S', ü: 'u', Ü: 'U' }[ch])).normalize('NFKD').replace(/[^\w.\- ]+/g, '').trim() || 'model';
+  const base = ascii((meta.file.split(',')[0] || 'model').replace(/\.(pbix|pbit|pbip|zip)$/i, '')) + (lang === 'tr' ? '-devir-belgesi' : '-handover');
+  if (kind === 'md') {
+    const text = handoverMarkdown(t, d.R, d.L, d.EX, meta), name = base + '.md';
+    download(new Blob([text], { type: 'text/markdown;charset=utf-8' }), name);
+    state.doc.msg = t('ex.done', { name });
+  } else {
+    const html = handoverHtml(t, d.R, d.L, d.EX, meta, lang), name = base + '.html';
+    download(new Blob([html], { type: 'text/html;charset=utf-8' }), name);
+    state.doc.msg = t('ex.done', { name });
+  }
+  const m = $('#exMsg'); if (m) m.textContent = state.doc.msg;
+}
+async function download(blob, name) {
+  let dl = null;
+  try { dl = window.claude && typeof window.claude.use === 'function' ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
+  if (dl) { try { await dl.save({ filename: name, data: blob }); } catch (e) { /* kullanıcı vazgeçti */ } return; }
+  const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 /* ---------- Kopyalama ---------- */
 function outputs(kind) {
@@ -350,6 +418,35 @@ document.addEventListener('click', e => {
   if (el.dataset.copy) copyOut(el.dataset.copy);
 });
 document.addEventListener('click', e => { if (e.target.closest('#buildClean')) buildClean(); if (e.target.closest('#saveClean')) saveClean(); });
+// Belgele olayları
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-mode],[data-dtab],[data-lin],[data-toclean],[data-export],[data-table]'); if (!el) return;
+  if (el.dataset.mode) { if (el.dataset.mode !== state.mode) setMode(el.dataset.mode); return; }
+  if (el.dataset.dtab) { state.doc.tab = el.dataset.dtab; renderDoc(); const b = document.querySelector(`[data-dtab="${esc(state.doc.tab)}"]`); if (b) b.focus(); return; }
+  if (el.dataset.lin) { const [k, id] = el.dataset.lin.split(':'); openLineage(k, +id); return; }
+  if (el.dataset.toclean) { setMode('clean', { focus: false }); jumpTo(el.dataset.toclean); return; }
+  if (el.dataset.export) { exportDoc(el.dataset.export); return; }
+  if (el.dataset.table != null) openLineage('table', +el.dataset.table);
+});
+document.addEventListener('keydown', e => {
+  const g = e.target.closest && e.target.closest('[data-table]');
+  if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openLineage('table', +g.dataset.table); }
+  // Sekmeler arasında ok tuşlarıyla gezinme
+  const tab = e.target.closest && e.target.closest('[data-dtab],[data-mode]');
+  if (tab && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+    const list = [...tab.parentElement.querySelectorAll(tab.dataset.dtab ? '[data-dtab]' : '[data-mode]')], i = list.indexOf(tab);
+    const nx = list[(i + (e.key === 'ArrowRight' ? 1 : list.length - 1)) % list.length]; nx.click(); nx.focus();
+  }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'linStart') { const [k, id] = e.target.value.split(':'); state.doc.start = { kind: k, id: +id }; renderDocBody(); const s = $('#linStart'); if (s) s.focus(); }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'msNoExp') { state.doc.noExp = e.target.checked; renderDocBody(); const s = $('#msNoExp'); if (s) s.focus(); return; }
+  if (e.target.id === 'msSearch') { state.doc.q = e.target.value; const pos = e.target.selectionStart; renderDocBody(); const s = $('#msSearch'); if (s) { s.focus(); s.setSelectionRange(pos, pos); } }
+  if (e.target.id === 'exBy') state.doc.by = e.target.value;
+  if (e.target.id === 'exTo') state.doc.to = e.target.value;
+});
 
 /** Kopyayı kaydet: claude.ai içinde "downloads" yeteneğiyle, kendi sitede normal indirme bağlantısıyla. */
 async function saveClean() {
@@ -384,7 +481,7 @@ $('#reset').addEventListener('click', loadSample);
 $('#langSwitch').addEventListener('click', () => {
   lang = lang === 'tr' ? 'en' : 'tr'; t = makeT(lang); store.set('measure-sieve.lang', lang);
   try { const u = new URL(location.href); if (lang === 'en') u.searchParams.set('lang', 'en'); else u.searchParams.delete('lang'); history.replaceState(null, '', u); } catch (e) { /* çerçeve izin vermeyebilir */ }
-  applyStatic();
+  applyStatic(); state.ex = null;
   if (state.sample) loadSample(); else render();
 });
 const drop = $('#drop');

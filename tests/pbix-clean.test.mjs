@@ -36,7 +36,7 @@ test('PBIX metadata: SQLite okuyucu ve model eşlemesi', { skip: !sqlite && 'nod
   assert.equal(u.columns.find(c => c.name === 'Ad').sortBy, 'Sıra');
   assert.equal(m.tables[0].columns.find(c => c.name === 'Kâr').calculated, true);
   assert.ok(!m.tables[0].columns.some(c => /RowNumber/.test(c.name)), 'satır numarası sütunu atlanır');
-  assert.deepEqual(m.relationships[0], { fromTable: 'Satış', fromColumn: 'ÜrünKodu', toTable: 'Ürün', toColumn: 'ÜrünKodu', active: true });
+  assert.deepEqual(m.relationships[0], { fromTable: 'Satış', fromColumn: 'ÜrünKodu', toTable: 'Ürün', toColumn: 'ÜrünKodu', active: true, crossFilter: 'single', fromCard: 'many', toCard: 'one' });
 });
 
 test('Temizlenmiş kopya: PBIT örneği doğrulamadan geçer', async () => {

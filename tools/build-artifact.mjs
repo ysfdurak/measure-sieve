@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const web = p => readFile(path.join(root, 'web', p), 'utf8');
-const ORDER = ['xpress9.js', 'pbix.js', 'core.js', 'i18n.js', 'sample.js', 'clean.js', 'app.js'];
+const ORDER = ['xpress9.js', 'pbix.js', 'core.js', 'i18n.js', 'lineage.js', 'explain.js', 'diagram.js', 'docview.js', 'docgen.js', 'sample.js', 'clean.js', 'app.js'];
 const ns = f => '__m_' + f.replace(/\W/g, '_');
 
 function wrap(file, src) {

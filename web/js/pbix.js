@@ -227,14 +227,14 @@ export function modelFromMetadata(db) {
   const colType = c => c.Type != null ? c.Type : c.BindingType; // 1 veri, 2 hesaplanmış, 3 satır no, 4 hesaplanmış tablo sütunu
   const FSD = byId(rows('FormatStringDefinition')), DRD = byId(rows('DetailRowsDefinition'));
   const kpis = new Map(rows('KPI').map(k => [k.MeasureID, k]));
-  const out = { tables: [], relationships: [], roles: [], functions: [] };
+  const out = { tables: [], relationships: [], roles: [], functions: [], expressions: [] };
   const tbls = new Map();
   // SystemFlags bit 1: motorun iç tabloları (H$, R$, U$...). Bunlar kullanıcı nesnesi değildir, atlanır.
   [...T.values()].forEach(t => {
     const name = t.Name;
     if ((t.SystemFlags || 0) & 1) return;
     const tbl = { name, hidden: !!t.IsHidden, system: !!t.ShowAsVariationsOnly || /^(LocalDateTable|DateTableTemplate)_/i.test(name),
-      dataCategory: t.DataCategory || '', calculated: false, expr: '', calcGroup: false, calcItems: [], columns: [], measures: [], hierarchies: [] };
+      dataCategory: t.DataCategory || '', calculated: false, expr: '', calcGroup: false, calcItems: [], columns: [], measures: [], hierarchies: [], queries: [], description: t.Description || '' };
     tbls.set(t.ID, tbl); out.tables.push(tbl);
   });
   const variationTable = new Map();
@@ -243,7 +243,7 @@ export function modelFromMetadata(db) {
     const tbl = tbls.get(c.TableID), ty = colType(c); if (!tbl || ty === 3) return;
     tbl.columns.push({ name: colName(c), hidden: !!c.IsHidden, calculated: ty === 2, expr: ty === 2 ? (c.Expression || '') : '',
       sortBy: c.SortByColumnID ? colName(C.get(c.SortByColumnID)) : null, isKey: !!c.IsKey, variationTables: variationTable.get(c.ID) || [],
-      source: ty === 2 ? '' : String(c.SourceColumn || '').replace(/^\[(.*)\]$/, '$1') });
+      source: ty === 2 ? '' : String(c.SourceColumn || '').replace(/^\[(.*)\]$/, '$1'), description: c.Description || '' });
   });
   rows('Measure').forEach(m => {
     const tbl = tbls.get(m.TableID); if (!tbl) return;
@@ -251,14 +251,20 @@ export function modelFromMetadata(db) {
     const extras = [m.FormatStringDefinitionID && FSD.get(m.FormatStringDefinitionID) && FSD.get(m.FormatStringDefinitionID).Expression,
       m.DetailRowsDefinitionID && DRD.get(m.DetailRowsDefinitionID) && DRD.get(m.DetailRowsDefinitionID).Expression,
       k && k.TargetExpression, k && k.StatusExpression, k && k.TrendExpression].filter(Boolean).join('\n');
-    tbl.measures.push({ name: m.Name, expr: m.Expression || '', extras, hidden: !!m.IsHidden, folder: m.DisplayFolder || '' });
+    tbl.measures.push({ name: m.Name, expr: m.Expression || '', extras, hidden: !!m.IsHidden, folder: m.DisplayFolder || '', description: m.Description || '' });
   });
   const levels = rows('Level');
   [...H.values()].forEach(h => {
     const tbl = tbls.get(h.TableID); if (!tbl) return;
     tbl.hierarchies.push({ name: h.Name, levels: levels.filter(l => l.HierarchyID === h.ID).sort((a, b) => (a.Ordinal || 0) - (b.Ordinal || 0)).map(l => ({ name: l.Name, column: colName(C.get(l.ColumnID)) })) });
   });
-  rows('Partition').forEach(p => { if (p.Type === 2) { const tbl = tbls.get(p.TableID); if (tbl) { tbl.calculated = true; tbl.expr += (p.QueryDefinition || '') + '\n'; } } });
+  // Bölüm türü: 2 hesaplanmış (DAX), 4 Power Query (M). Mod: 0 içe aktarma, 1 DirectQuery
+  rows('Partition').forEach(p => {
+    const tbl = tbls.get(p.TableID); if (!tbl) return;
+    if (p.Type === 2) { tbl.calculated = true; tbl.expr += (p.QueryDefinition || '') + '\n'; }
+    else if (p.Type === 4 && p.QueryDefinition) tbl.queries.push({ name: p.Name || tbl.name, expr: p.QueryDefinition, mode: p.Mode === 1 ? 'directQuery' : 'import' });
+  });
+  rows('Expression').forEach(e => { if (e.Expression && (e.Kind == null || e.Kind === 0)) out.expressions.push({ name: e.Name, expr: e.Expression, description: e.Description || '' }); });
   const CG = byId(rows('CalculationGroup'));
   rows('CalculationItem').forEach(ci => {
     const g = CG.get(ci.CalculationGroupID), tbl = g && tbls.get(g.TableID); if (!tbl) return;
@@ -271,7 +277,9 @@ export function modelFromMetadata(db) {
     const ft = T.get(relCol(r, 'FromTableID', 'FromEndTableID')), tt = T.get(relCol(r, 'ToTableID', 'ToEndTableID'));
     const fc = C.get(relCol(r, 'FromColumnID', 'FromEndColumnID')), tc = C.get(relCol(r, 'ToColumnID', 'ToEndColumnID'));
     if (!ft || !tt || !fc || !tc) return;
-    out.relationships.push({ fromTable: ft.Name, fromColumn: colName(fc), toTable: tt.Name, toColumn: colName(tc), active: r.IsActive !== 0 });
+    // Kardinalite: 1 bir, 2 çok. Çapraz filtre: 1 tek yön, 2 çift yön
+    out.relationships.push({ fromTable: ft.Name, fromColumn: colName(fc), toTable: tt.Name, toColumn: colName(tc), active: r.IsActive !== 0,
+      crossFilter: r.CrossFilteringBehavior === 2 ? 'both' : 'single', fromCard: r.FromCardinality === 1 ? 'one' : 'many', toCard: r.ToCardinality === 2 ? 'many' : 'one' });
   });
   const R = byId(rows('Role'));
   rows('TablePermission').forEach(tp => { if (!tp.FilterExpression) return; const r = R.get(tp.RoleID), t = T.get(tp.TableID); out.roles.push({ name: (r ? r.Name : '?') + ' › ' + (t ? t.Name : '?'), table: t ? t.Name : null, expr: tp.FilterExpression }); });

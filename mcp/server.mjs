@@ -19,6 +19,10 @@ import JSZip from 'jszip';
 import { removalPlan, teScript, CANDIDATE, nodeLabel, norm } from '../web/js/core.js';
 import { listNames } from '../web/js/i18n.js';
 import { makeT, reasonText, noteText, usageText } from '../web/js/i18n.js';
+import { buildLineage } from '../web/js/lineage.js';
+import { explainAll } from '../web/js/explain.js';
+import { chainFor, sourceLabel, visualLabel } from '../web/js/docview.js';
+import { handoverMarkdown } from '../web/js/docgen.js';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
 const ROOTS = (args.length ? args : [os.homedir()]).map(r => path.resolve(r));
@@ -63,8 +67,8 @@ function summary(t, x) {
     `Rapor / reports: ${x.reports.map(r => `${r.name} (${r.pages}p, ${r.visuals}v)`).join(', ') || '-'}`];
 }
 
-const server = new McpServer({ name: 'measure-sieve', version: '1.0.0' }, {
-  instructions: 'Measure Sieve, Power BI modelinde (PBIX, PBIT, PBIP) kullanılmayan measure, sütun ve tabloları bulur. Akış: modeli_tara ile özet al; oge_detayi ile tek öğeye bak; silme_plani ile sıra ve Tabular Editor betiği üret; temiz_kopya_olustur ile aslına dokunmadan temizlenmiş kopya yaz (PBIT/PBIP; yapısal doğrulama otomatik). Rakamların değişmediğini görmek için Windows\'ta açık Power BI Desktop ile: temizlikten önce degerleri_olc, sonra degerleri_karsilastir. Hiçbir aracı kullanıcı istemeden temizlik için çalıştırma. Sonuçları "kullanılmıyor gibi görünüyor" diye aktar; yüklenmeyen raporlar ve Excel bağlantıları görülemez. PBIX\'e yazılmaz; kopya için PBIP iste.'
+const server = new McpServer({ name: 'measure-sieve', version: '1.2.0' }, {
+  instructions: 'Measure Sieve, Power BI modelinde (PBIX, PBIT, PBIP) kullanılmayan measure, sütun ve tabloları bulur. Akış: modeli_tara ile özet al; modeli anlamak için soyagaci (bir sayı nereden geliyor, bir kaynak değişirse ne etkilenir) ve devir_belgesi (kaynaklar, ilişkiler, measure açıklamaları, sayfalar); oge_detayi ile tek öğeye bak; silme_plani ile sıra ve Tabular Editor betiği üret; temiz_kopya_olustur ile aslına dokunmadan temizlenmiş kopya yaz (PBIT/PBIP; yapısal doğrulama otomatik). Rakamların değişmediğini görmek için Windows\'ta açık Power BI Desktop ile: temizlikten önce degerleri_olc, sonra degerleri_karsilastir. Hiçbir aracı kullanıcı istemeden temizlik için çalıştırma. Sonuçları "kullanılmıyor gibi görünüyor" diye aktar; yüklenmeyen raporlar ve Excel bağlantıları görülemez. PBIX\'e yazılmaz; kopya için PBIP iste.'
 });
 
 server.registerTool('modeli_tara', {
@@ -127,6 +131,72 @@ server.registerTool('oge_detayi', {
   if (n.uses.size) lines.push(`${t('d.uses')}: ${[...n.uses].map(i => nodeLabel(x.nodes[i])).join(', ')}`);
   if (n.duplicates.length) lines.push(`${t('d.dups')}: ${n.duplicates.map(i => x.nodes[i].name).join(', ')}`);
   return text(lines.join('\n'));
+});
+
+/** Soyağacı başlangıcını adından bulur: measure/sütun, tablo, kaynak konumu ya da görsel ("Sayfa › Başlık"). */
+function findStart(x, L, t, ad) {
+  const s = ad.trim(), m = /^'?(.*?)'?\[(.+)\]$/.exec(s);
+  const tb = m ? m[1] : null, nm = m ? m[2] : s.replace(/^\[|\]$/g, '');
+  const node = x.nodes.find(n => n.origin !== 'reportOnly' && norm(n.name) === norm(nm) && (tb ? norm(n.table) === norm(tb) : n.kind === 'measure'))
+    || (!tb && x.nodes.find(n => n.origin !== 'reportOnly' && norm(n.name) === norm(nm)));
+  if (node) return { kind: 'node', id: node.id };
+  const table = x.tables.find(tt => !tt.system && norm(tt.name) === norm(s));
+  if (table) return { kind: 'table', id: table.id };
+  const src = L.sources.find(so => so.location && norm(so.location).includes(norm(s)));
+  if (src) return { kind: 'source', id: src.id };
+  const [pg, vt] = s.includes('›') ? s.split('›').map(z => z.trim()) : [null, s];
+  const vis = L.visuals.find(v => (!pg || norm(v.page) === norm(pg)) && (norm(v.title || '') === norm(vt) || norm(visualLabel(t, v)) === norm(vt)));
+  if (vis) return { kind: 'visual', id: vis.id };
+  return null;
+}
+
+server.registerTool('soyagaci', {
+  title: 'Veri soyağacı',
+  description: 'Bir measure, sütun, tablo, veri kaynağı ya da görsel için zinciri gösterir: kaynak → Power Query sorgusu → tablo → measure/sütun → rapor görseli. Görsel ve measure için "bu sayı nereden geliyor?", kaynak ve tablo için "bu değişirse ne etkilenir?" sorusunu cevaplar. Kaynaklar M kodundan okunur; kod çalıştırılmaz.',
+  inputSchema: { yollar: PATHS, ad: z.string().describe('Measure ("Toplam Satış"), sütun ("Satış[Tutar]"), tablo adı, kaynak konumunun bir parçası ("satis.xlsx") ya da görsel ("Genel Bakış › Ciro")'), model: z.string().optional(), dil: LANG },
+  annotations: { readOnlyHint: true, openWorldHint: false }
+}, async ({ yollar, ad, model, dil }) => {
+  const t = makeT(dil || 'tr'), r = await load(yollar), x = pickProject(r, model);
+  if (!x) return text(errorNotes(t, r).join('\n') || 'Model bulunamadı.');
+  if (!x.hasModel) return text(t('doc.noModel'));
+  const L = buildLineage(x), start = findStart(x, L, t, ad);
+  if (!start) return text(`"${ad}" bulunamadı / not found.`);
+  const c = chainFor(x, L, start), lines = [];
+  const srcs = c.sources.map(i => sourceLabel(t, L.sources[i]));
+  const vis = c.visuals.map(i => L.visuals[i]);
+  const name = start.kind === 'node' ? nodeLabel(x.nodes[start.id]) : start.kind === 'table' ? x.tables[start.id].name : start.kind === 'source' ? srcs.find(() => true)?.loc || ad : visualLabel(t, L.visuals[start.id]);
+  lines.push(start.kind === 'visual' ? t('lin.sumUp', { name, s: srcs.length, q: c.queries.length, t: c.tables.length })
+    : start.kind === 'source' ? t('lin.sumDown', { name, v: vis.length, n: c.nodes.length }) : t('lin.sumBoth', { name, s: srcs.length, v: vis.length }));
+  if (!srcs.length && start.kind !== 'source') lines.push(t('lin.noSource'));
+  const sec = (h, arr) => { lines.push('', `### ${h} (${arr.length})`); arr.slice(0, 60).forEach(a => lines.push('- ' + a)); if (arr.length > 60) lines.push(`- … +${arr.length - 60}`); };
+  sec(t('lin.col.source'), srcs.map(s => `${s.type}: ${s.loc}${s.extra ? ' (' + s.extra + ')' : ''}`));
+  sec(t('lin.col.query'), c.queries.map(i => L.queries[i]).filter(q => !q.isFunction).map(q => q.name + (q.mode === 'directQuery' ? ' (DirectQuery)' : '')));
+  sec(t('lin.col.table'), c.tables.map(i => x.tables[i]).filter(tt => !tt.system).map(tt => tt.name));
+  sec(t('lin.col.field'), c.nodes.map(i => x.nodes[i]).filter(n => !(n.tableId != null && x.tables[n.tableId].system)).map(n => nodeLabel(n)));
+  if (c.hiddenCols) lines.push(`- (+${c.hiddenCols} ${t('kind.column')})`);
+  sec(t('lin.col.visual'), vis.map(v => `${v.page} › ${visualLabel(t, v)}`));
+  return text(lines.join('\n'));
+});
+
+server.registerTool('devir_belgesi', {
+  title: 'Devir belgesi',
+  description: 'Modeli devralacak kişi için Markdown devir belgesi üretir: veri kaynakları ve parametreler, tablolar ve ilişkiler, dikkat edilecekler (riskli ilişki, kullanılmayan öğeler, aynı formül), measure açıklamaları (modeldeki açıklama ya da formülden kural tabanlı), sayfa sayfa görseller ve güvenlik rolleri. Web sürümündeki "Markdown indir" ile aynı belgeyi verir.',
+  inputSchema: { yollar: PATHS, model: z.string().optional(), dil: LANG,
+    hazirlayan: z.string().max(80).optional().describe('Belgede "Hazırlayan" satırı'), devralan: z.string().max(80).optional().describe('Belgede "Devralan" satırı'),
+    kaydet: z.string().optional().describe('İsteğe bağlı: belgenin yazılacağı .md yolu (izinli klasör içinde, var olan dosyanın üzerine yazılmaz)') },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+}, async ({ yollar, model, dil, hazirlayan, devralan, kaydet }) => {
+  const lang = dil || 'tr', t = makeT(lang), r = await load(yollar), x = pickProject(r, model);
+  if (!x) return text(errorNotes(t, r).join('\n') || 'Model bulunamadı.');
+  if (!x.hasModel) return text(t('doc.noModel'));
+  const L = buildLineage(x), EX = explainAll(x, lang);
+  const md = handoverMarkdown(t, x, L, EX, { by: hazirlayan || '', to: devralan || '', date: new Date().toISOString().slice(0, 10), file: yollar.map(p => path.basename(p)).join(', ') });
+  if (kaydet) {
+    if (!/\.md$/i.test(kaydet)) return text('Yalnız .md uzantılı dosyaya yazılır / only .md files.');
+    const target = await checkTarget(kaydet); await fs.writeFile(target, md, 'utf8');
+    return text(`Kaydedildi / saved: ${target}\n\n${md}`);
+  }
+  return text(md);
 });
 
 server.registerTool('silme_plani', {

@@ -24,7 +24,18 @@ test('MCP: araçlar listelenir ve örnek PBIT taranır', async () => {
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.join(here, '../mcp/server.mjs'), dir] }));
   try {
     const tools = (await client.listTools()).tools.map(t => t.name).sort();
-    assert.deepEqual(tools, ['degerleri_karsilastir', 'degerleri_olc', 'desktop_listele', 'modeli_tara', 'oge_detayi', 'silme_plani', 'temiz_kopya_olustur']);
+    assert.deepEqual(tools, ['degerleri_karsilastir', 'degerleri_olc', 'desktop_listele', 'devir_belgesi', 'modeli_tara', 'oge_detayi', 'silme_plani', 'soyagaci', 'temiz_kopya_olustur']);
+    // Belgele: soyağacı (görselden kaynağa, kaynaktan görsele) ve devir belgesi
+    const up = (await client.callTool({ name: 'soyagaci', arguments: { yollar: [file], ad: 'Genel Bakış › Ürün Tablosu' } })).content[0].text;
+    assert.match(up, /2 kaynaktan/); assert.match(up, /Excel dosyası: C:\\Ortak\\Satış\\Ürün Listesi\.xlsx/); assert.match(up, /SQL Server: sql-satis-01/);
+    const down = (await client.callTool({ name: 'soyagaci', arguments: { yollar: [file], ad: 'Ürün Listesi.xlsx' } })).content[0].text;
+    assert.match(down, /değişirse 2 görsel/);
+    const doc = (await client.callTool({ name: 'devir_belgesi', arguments: { yollar: [file], hazirlayan: 'Test' } })).content[0].text;
+    assert.match(doc, /^# Devir belgesi: Satış Raporu\.pbit/); assert.match(doc, /\| Hazırlayan \| Test \|/); assert.match(doc, /Çift yönlü filtre/); assert.match(doc, /## Devralan kontrol listesi/); assert.match(doc, /- \[ \] Yenileme zamanı ve sıklığı: ______/); assert.match(doc, /Ağ geçidi/);
+    const yaz = await client.callTool({ name: 'devir_belgesi', arguments: { yollar: [file], kaydet: path.join(dir, 'devir.md') } });
+    assert.match(yaz.content[0].text, /İndirildi|devir\.md/);
+    const dis = await client.callTool({ name: 'devir_belgesi', arguments: { yollar: [file], kaydet: path.join(os.tmpdir(), '..', 'x.md') } });
+    assert.ok(dis.isError || /dışına|outside/.test(dis.content[0].text), 'izinli klasör dışına yazılmaz');
     const scan = (await client.callTool({ name: 'modeli_tara', arguments: { yollar: [file] } })).content[0].text;
     assert.match(scan, /\[Kullanılmıyor gibi\] Satış\[Hedefe Uzaklık\]/);
     assert.match(scan, /Toplam Satış = Ciro|Ciro = Toplam Satış/);

@@ -127,3 +127,35 @@ test('Power Query adımı: modelde yeniden adlandırılmış sütun için kaynak
   assert.doesNotMatch(sc.powerQuery, /Tarih/, 'hesaplanmış tablonun sütunu Power Query adımına girmez');
   assert.match(sc.script, /hesaplanmış tablonun sütunu.*Takvim\[Tarih\]/);
 });
+
+test('Belgele okuyucuları: M sorgusu, parametre, ilişki ayrıntısı, açıklama (TMDL ve TMSL aynı sonucu verir)', async () => {
+  const tmdl = [
+    entry('M.SemanticModel/definition/tables/Satış.tmdl', "/// Günlük satış satırları\ntable Satış\n\t/// Kampanya dahil toplam ciro\n\tmeasure Ciro = SUM(Satış[Tutar])\n\n\tcolumn Tutar\n\t\tdataType: double\n\n\tcolumn Kod\n\t\tdataType: string\n\n\tpartition Satış = m\n\t\tmode: import\n\t\tsource =\n\t\t\t\tlet\n\t\t\t\t    Kaynak = Excel.Workbook(File.Contents(\"C:\\Veri\\satis.xlsx\"), null, true)\n\t\t\t\tin\n\t\t\t\t    Kaynak\n"),
+    entry('M.SemanticModel/definition/tables/Ürün.tmdl', 'table Ürün\n\tcolumn Kod\n\t\tdataType: string\n\n\tpartition Ürün = m\n\t\tmode: directQuery\n\t\tsource = Sql.Database(Sunucu, "DW")\n'),
+    entry('M.SemanticModel/definition/expressions.tmdl', 'expression Sunucu = "srv01" meta [IsParameterQuery=true, Type="Text"]\n\tlineageTag: x\n'),
+    entry('M.SemanticModel/definition/relationships.tmdl', 'relationship r1\n\tcrossFilteringBehavior: bothDirections\n\tfromColumn: Satış.Kod\n\ttoColumn: Ürün.Kod\n')
+  ];
+  const bim = { model: {
+    tables: [
+      { name: 'Satış', description: 'Günlük satış satırları', measures: [{ name: 'Ciro', expression: 'SUM(Satış[Tutar])', description: 'Kampanya dahil toplam ciro' }],
+        columns: [{ name: 'Tutar' }, { name: 'Kod' }],
+        partitions: [{ name: 'Satış', mode: 'import', source: { type: 'm', expression: ['let', '    Kaynak = Excel.Workbook(File.Contents("C:\\Veri\\satis.xlsx"), null, true)', 'in', '    Kaynak'] } }] },
+      { name: 'Ürün', columns: [{ name: 'Kod' }], partitions: [{ name: 'Ürün', mode: 'directQuery', source: { type: 'm', expression: 'Sql.Database(Sunucu, "DW")' } }] }
+    ],
+    expressions: [{ name: 'Sunucu', kind: 'm', expression: '"srv01" meta [IsParameterQuery=true, Type="Text"]' }],
+    relationships: [{ name: 'r1', fromTable: 'Satış', fromColumn: 'Kod', toTable: 'Ürün', toColumn: 'Kod', crossFilteringBehavior: 'bothDirections' }]
+  } };
+  const [a] = await run(tmdl);
+  const [b] = await run([entry('N.SemanticModel/model.bim', bim)]);
+  for (const r of [a, b]) {
+    const s = r.tables.find(t => t.name === 'Satış'), u = r.tables.find(t => t.name === 'Ürün');
+    assert.equal(s.description, 'Günlük satış satırları');
+    assert.equal(find(r, 'Ciro').description, 'Kampanya dahil toplam ciro');
+    assert.equal(s.queries.length, 1);
+    assert.equal(s.queries[0].expr.split('\n')[0], 'let', 'girinti kaldırılır');
+    assert.match(s.queries[0].expr, /Excel\.Workbook/);
+    assert.equal(u.queries[0].mode, 'directQuery');
+    assert.deepEqual(r.expressions.map(e => e.name), ['Sunucu']);
+    assert.deepEqual(r.relationships.map(x => [x.fromCard, x.toCard, x.crossFilter, x.active]), [['many', 'one', 'both', true]]);
+  }
+});

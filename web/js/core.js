@@ -121,9 +121,9 @@ export function normalizeDax(s) {
 /* ---------------------------------------------------------------- Model okuyucular */
 
 const AUTO_DATE = /^(LocalDateTable|DateTableTemplate)_/i;
-function emptyModel() { return { tables: [], relationships: [], roles: [], functions: [] }; }
+function emptyModel() { return { tables: [], relationships: [], roles: [], functions: [], expressions: [] }; }
 function newTable(name) {
-  return { name, hidden: false, system: AUTO_DATE.test(name), dataCategory: '', calculated: false, expr: '', calcGroup: false, calcItems: [], columns: [], measures: [], hierarchies: [] };
+  return { name, hidden: false, system: AUTO_DATE.test(name), dataCategory: '', calculated: false, expr: '', calcGroup: false, calcItems: [], columns: [], measures: [], hierarchies: [], queries: [], description: '' };
 }
 
 /** TMSL biçimi: PBIT içindeki DataModelSchema ve PBIP içindeki model.bim. */
@@ -134,28 +134,34 @@ export function modelFromBim(json) {
     tbl.hidden = !!t.isHidden;
     if (t.showAsVariationsOnly) tbl.system = true;
     tbl.dataCategory = t.dataCategory || '';
+    tbl.description = joinExpr(t.description);
     (t.columns || []).forEach(c => {
       if (c.type === 'rowNumber' || /^RowNumber-/.test(c.name)) return;
       tbl.columns.push({
         name: c.name, hidden: !!c.isHidden, calculated: c.type === 'calculated', expr: c.type === 'calculated' ? joinExpr(c.expression) : '',
         sortBy: c.sortByColumn || null, isKey: !!c.isKey, source: c.type === 'calculated' ? '' : (c.sourceColumn || ''),
-        variationTables: (c.variations || []).map(v => v.defaultHierarchy && v.defaultHierarchy.table).filter(Boolean)
+        variationTables: (c.variations || []).map(v => v.defaultHierarchy && v.defaultHierarchy.table).filter(Boolean), description: joinExpr(c.description)
       });
     });
     (t.measures || []).forEach(me => {
       const extras = [me.formatStringDefinition && me.formatStringDefinition.expression, me.detailRowsDefinition && me.detailRowsDefinition.expression,
         me.kpi && me.kpi.targetExpression, me.kpi && me.kpi.statusExpression, me.kpi && me.kpi.trendExpression].filter(Boolean).map(joinExpr).join('\n');
-      tbl.measures.push({ name: me.name, expr: joinExpr(me.expression), extras, hidden: !!me.isHidden, folder: me.displayFolder || '' });
+      tbl.measures.push({ name: me.name, expr: joinExpr(me.expression), extras, hidden: !!me.isHidden, folder: me.displayFolder || '', description: joinExpr(me.description) });
     });
     (t.hierarchies || []).forEach(h => tbl.hierarchies.push({ name: h.name, levels: (h.levels || []).map(l => ({ name: l.name, column: l.column })) }));
-    (t.partitions || []).forEach(p => { if (p.source && p.source.type === 'calculated') { tbl.calculated = true; tbl.expr += joinExpr(p.source.expression) + '\n'; } });
+    (t.partitions || []).forEach(p => {
+      if (p.source && p.source.type === 'calculated') { tbl.calculated = true; tbl.expr += joinExpr(p.source.expression) + '\n'; }
+      else if (p.source && p.source.type === 'm') tbl.queries.push({ name: p.name || t.name, expr: joinExpr(p.source.expression), mode: p.mode || 'import' });
+    });
     if (t.calculationGroup) {
       tbl.calcGroup = true;
       (t.calculationGroup.calculationItems || []).forEach(ci => tbl.calcItems.push({ name: ci.name, expr: joinExpr(ci.expression) + '\n' + (ci.formatStringDefinition ? joinExpr(ci.formatStringDefinition.expression) : '') }));
     }
     out.tables.push(tbl);
   });
-  (m.relationships || []).forEach(r => out.relationships.push({ fromTable: r.fromTable, fromColumn: r.fromColumn, toTable: r.toTable, toColumn: r.toColumn, active: r.isActive !== false }));
+  (m.relationships || []).forEach(r => out.relationships.push({ fromTable: r.fromTable, fromColumn: r.fromColumn, toTable: r.toTable, toColumn: r.toColumn, active: r.isActive !== false,
+    crossFilter: r.crossFilteringBehavior === 'bothDirections' ? 'both' : 'single', fromCard: r.fromCardinality || 'many', toCard: r.toCardinality || 'one' }));
+  (m.expressions || []).forEach(e => { if (e.kind === undefined || e.kind === 'm') out.expressions.push({ name: e.name, expr: joinExpr(e.expression), description: joinExpr(e.description) }); });
   (m.roles || []).forEach(r => (r.tablePermissions || []).forEach(tp => { if (tp.filterExpression) out.roles.push({ name: r.name + ' › ' + tp.name, table: tp.name, expr: joinExpr(tp.filterExpression) }); }));
   (m.functions || []).forEach(f => { if (f.expression) out.functions.push({ name: f.name, expr: joinExpr(f.expression) }); });
   return out;
@@ -233,6 +239,29 @@ const tmdlProps = (lines, level) => {
   return p;
 };
 
+/** Ortak girintiyi kaldırır (M kodu ekranda Power Query'deki gibi görünsün). */
+function dedent(text) {
+  const ls = String(text).replace(/\r/g, '').split('\n');
+  while (ls.length && !ls[0].trim()) ls.shift();
+  while (ls.length && !ls[ls.length - 1].trim()) ls.pop();
+  const ind = ls.filter(l => l.trim()).map(l => /^[\t ]*/.exec(l)[0].length);
+  const cut = ind.length ? Math.min(...ind) : 0;
+  return ls.map(l => l.slice(Math.min(cut, /^[\t ]*/.exec(l)[0].length))).join('\n');
+}
+/** TMDL'de bir nesnenin hemen üstündeki /// satırları onun açıklamasıdır. */
+function tmdlDesc(lines, header) {
+  const i = lines.indexOf(header); if (i < 0) return '';
+  const out = []; let j = i - 1;
+  while (j >= 0 && lines[j].trim().startsWith('///')) { out.unshift(lines[j].trim().replace(/^\/\/\/\s?/, '')); j--; }
+  return out.join('\n').trim();
+}
+/** Bölümün "source =" satırından sonraki M kodu. */
+function tmdlSource(rest) {
+  const txt = stripFence(rest.join('\n')), m = /(^|\n)[\t ]*source[\t ]*=[\t ]*([\s\S]*)$/.exec(txt);
+  if (!m) return '';
+  return dedent(m[2].split('\n').filter(l => !TMDL_SKIP.test(l.trim()) && !/^[\t ]*[A-Za-z]\w*\s*:/.test(l)).join('\n'));
+}
+
 export function modelFromTmdl(files) {
   const out = emptyModel();
   files.forEach(f => {
@@ -242,12 +271,21 @@ export function modelFromTmdl(files) {
       return;
     }
     if (/(^|\/)functions\.tmdl$/.test(lp)) { out.functions.push({ name: base, expr: tmdlDaxLines(lines) }); return; }
+    if (/(^|\/)expressions\.tmdl$/.test(lp)) {
+      tmdlBlocks(lines, 0).forEach(b => {
+        if (!/^expression\b/.test(b[0].trim())) return;
+        const o = tmdlObject(b, 0);
+        out.expressions.push({ name: o.name, expr: dedent(o.expr), description: tmdlDesc(lines, b[0]) });
+      });
+      return;
+    }
     if (/(^|\/)relationships\.tmdl$/.test(lp)) {
       tmdlBlocks(lines, 0).forEach(b => {
         if (!/^relationship\b/.test(b[0].trim())) return;
         const p = tmdlProps(b.slice(1), 1); if (!p.fromColumn || !p.toColumn) return;
         const [ft, fc] = tmdlDotted(p.fromColumn), [tt, tc] = tmdlDotted(p.toColumn);
-        out.relationships.push({ fromTable: ft, fromColumn: fc, toTable: tt, toColumn: tc, active: p.isActive !== 'false' });
+        out.relationships.push({ fromTable: ft, fromColumn: fc, toTable: tt, toColumn: tc, active: p.isActive !== 'false',
+          crossFilter: p.crossFilteringBehavior === 'bothDirections' ? 'both' : 'single', fromCard: typeof p.fromCardinality === 'string' ? p.fromCardinality : 'many', toCard: typeof p.toCardinality === 'string' ? p.toCardinality : 'one' });
       });
       return;
     }
@@ -259,11 +297,12 @@ export function modelFromTmdl(files) {
     tbl.hidden = !!tp.isHidden && tp.isHidden !== 'false';
     if (tp.showAsVariationsOnly) tbl.system = true;
     tbl.dataCategory = typeof tp.dataCategory === 'string' ? tp.dataCategory : '';
+    tbl.description = tmdlDesc(lines, lines[hdrIdx]);
     tmdlBlocks(body, 1).forEach(block => {
       const kw = block[0].trim().split(/\s/)[0];
       if (kw === 'measure') {
         const o = tmdlObject(block, 1), p = tmdlProps(o.rest, 2);
-        tbl.measures.push({ name: o.name, expr: o.expr, extras: tmdlDaxLines(o.rest), hidden: !!p.isHidden && p.isHidden !== 'false', folder: typeof p.displayFolder === 'string' ? p.displayFolder : '' });
+        tbl.measures.push({ name: o.name, expr: o.expr, extras: tmdlDaxLines(o.rest), hidden: !!p.isHidden && p.isHidden !== 'false', folder: typeof p.displayFolder === 'string' ? p.displayFolder : '', description: tmdlDesc(lines, block[0]) });
       } else if (kw === 'column') {
         const o = tmdlObject(block, 1), p = tmdlProps(o.rest, 2);
         const vt = [];
@@ -274,13 +313,17 @@ export function modelFromTmdl(files) {
         tbl.columns.push({
           name: o.name, hidden: !!p.isHidden && p.isHidden !== 'false', calculated: o.hasExpr && !!o.expr, expr: o.hasExpr ? o.expr : '',
           sortBy: typeof p.sortByColumn === 'string' ? tmdlName(p.sortByColumn).name : null, isKey: !!p.isKey && p.isKey !== 'false', variationTables: vt,
-          source: typeof p.sourceColumn === 'string' ? p.sourceColumn.trim().replace(/^'((?:[^']|'')*)'$/, (m, v) => v.replace(/''/g, "'")).replace(/^\[(.*)\]$/, '$1') : ''
+          source: typeof p.sourceColumn === 'string' ? p.sourceColumn.trim().replace(/^'((?:[^']|'')*)'$/, (m, v) => v.replace(/''/g, "'")).replace(/^\[(.*)\]$/, '$1') : '',
+          description: tmdlDesc(lines, block[0])
         });
       } else if (kw === 'partition') {
         const o = tmdlObject(block, 1);
         if (/^calculated/i.test(o.expr)) {
           const txt = stripFence(o.rest.join('\n')), m = /source\s*=\s*([\s\S]*)$/.exec(txt);
           if (m) { tbl.calculated = true; tbl.expr += m[1].split('\n').filter(l => !TMDL_SKIP.test(l.trim())).join('\n') + '\n'; }
+        } else if (/^m\b/i.test(o.expr)) {
+          const src = tmdlSource(o.rest), mp = tmdlProps(o.rest, 2);
+          if (src) tbl.queries.push({ name: o.name, expr: src, mode: typeof mp.mode === 'string' ? mp.mode : 'import' });
         }
       } else if (kw === 'hierarchy') {
         const o = tmdlObject(block, 1), levels = [];
@@ -537,14 +580,14 @@ export function analyze(project) {
   const mkNode = (kind, d, table, origin) => {
     const n = {
       id: nodes.length, kind, name: d.name, table: table ? table.name : (d.table || ''), tableId: table ? table.id : null, origin,
-      expr: d.expr == null ? null : d.expr, extras: d.extras || '', hidden: !!d.hidden, folder: d.folder || '', calculated: !!d.calculated, source: d.source || '',
+      expr: d.expr == null ? null : d.expr, extras: d.extras || '', hidden: !!d.hidden, folder: d.folder || '', calculated: !!d.calculated, source: d.source || '', description: d.description || '',
       usages: [], uses: new Set(), usedBy: new Set(), structural: [], textRefs: [], duplicates: [], unresolved: [], status: 'used', reason: null
     };
     nodes.push(n); if (table) table.nodes.push(n.id); return n;
   };
   if (model) {
     model.tables.forEach(t => {
-      const tbl = addTable(t.name, { hidden: t.hidden, system: t.system, calculated: t.calculated, calcGroup: t.calcGroup, expr: t.expr, isParam: t.calculated && /NAMEOF\s*\(/i.test(t.expr), status: 'used', reason: null });
+      const tbl = addTable(t.name, { hidden: t.hidden, system: t.system, calculated: t.calculated, calcGroup: t.calcGroup, expr: t.expr, isParam: t.calculated && /NAMEOF\s*\(/i.test(t.expr), status: 'used', reason: null, queries: t.queries || [], description: t.description || '' });
       const cmap = new Map(); colIdx.set(norm(t.name), cmap);
       t.columns.forEach(c => {
         const n = mkNode('column', c, tbl, 'model'); n.sortByName = c.sortBy; n.isKey = c.isKey; cmap.set(norm(c.name), n);
@@ -715,7 +758,8 @@ export function analyze(project) {
   return {
     label: project.label, source: project.source || null, hasModel, hasReport, nodes, items, tables, tableItems, duplicates, autoDate,
     reports: reports.map(r => ({ name: r.name, pages: r.pages, visuals: r.visuals })),
-    missing: [...missing.values()], notes: project.notes || [], binary: !!project.binary, live: !!project.live
+    missing: [...missing.values()], notes: project.notes || [], binary: !!project.binary, live: !!project.live,
+    relationships: model ? model.relationships : [], roles: model ? model.roles : [], expressions: model ? (model.expressions || []) : []
   };
 }
 function countKinds(us) { const c = {}; us.forEach(u => { c[u.kind] = (c[u.kind] || 0) + 1; }); return c; }
